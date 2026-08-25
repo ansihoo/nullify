@@ -17,13 +17,14 @@ import {
   INITIAL_SCAN_HISTORY,
 } from './data/mockSecurityData';
 import { Vulnerability, ChatMessage, ScanHistoryRecord } from './types';
-import { scanTarget, resolveIntent, generateFix, rescanTarget } from './api/nullify';
+import { scanInput, resolveIntent, generateFix, rescanTarget } from './api/nullify';
 
 export function App() {
   const [currentTab, setCurrentTab] = useState<'landing' | 'scanning' | 'analysis' | 'fix' | 'verify'>('landing');
   // 백엔드는 로컬 전용(127.0.0.1) + 공개 URL 거부이므로 기본 대상은 데모 과녁 앱.
   const [repoUrl, setRepoUrl] = useState<string>('http://127.0.0.1:8009');
   const [scanError, setScanError] = useState<string | null>(null);
+  const [scanNotice, setScanNotice] = useState<string | null>(null);   // 0건 등 정보성 안내
   const scanningRef = useRef<boolean>(false);   // 실제 스캔 진행중? (애니메이션과 경합 방지)
   const [vulnerabilities, setVulnerabilities] = useState<Vulnerability[]>(INITIAL_VULNERABILITIES);
   const [selectedVuln, setSelectedVuln] = useState<Vulnerability>(INITIAL_VULNERABILITIES[0]);
@@ -56,14 +57,18 @@ export function App() {
   const handleStartScan = async (targetUrl: string) => {
     setRepoUrl(targetUrl);
     setScanError(null);
+    setScanNotice(null);
     setCurrentTab('scanning');
     scanningRef.current = true;
     try {
-      // 실제 백엔드 결정론 스캔 호출 (mock 대체). discover=1 로 임의 앱 후보 자동발견.
-      const { vulnerabilities: vulns, filteredNoise: noise } = await scanTarget(targetUrl);
+      // 입력 종류로 자동 분기: git 레포 URL → SAST(소스), 런타임 URL → DAST.
+      const { vulnerabilities: vulns, filteredNoise: noise, isRepo } = await scanInput(targetUrl);
       setVulnerabilities(vulns);
       setFilteredNoise(noise);
       if (vulns.length) setSelectedVuln(vulns[0]);
+      else setScanNotice(isRepo
+        ? '정적 탐지 0건 — 이 레포엔 하드코딩 시크릿이 없습니다. 깊은 코드 분석(SQLi/XSS 등)은 서버에 semgrep 설치 시 활성화됩니다.'
+        : '발견된 취약점 없음 — 이 대상에서 재현되는 취약점을 찾지 못했습니다.');
     } catch (e: any) {
       setScanError(e?.message || String(e));
       setVulnerabilities([]);
@@ -138,17 +143,21 @@ export function App() {
     try {
       const fix = await generateFix(vuln);
       const prInfo = fix.ok
-        ? { branch: fix.branch, commit: fix.commit, title: fix.title, gh: fix.gh, fixSource: fix.fixSource }
-        : { error: fix.error, needsReview: fix.needsReview, reason: fix.reason };
+        ? { branch: fix.branch, commit: fix.commit, title: fix.title, gh: fix.gh,
+            fixSource: fix.fixSource, recommendation: fix.recommendation }
+        : { error: fix.error, needsReview: fix.needsReview, needsRepo: fix.needsRepo, reason: fix.reason };
+      // 설정 권고(recommendation)도 '해결'로 본다(소스 수정 불필요). 코드 PR 실패는 상태 유지.
+      const resolved = fix.ok;
+      const label = fix.recommendation ? '수정 완료 (설정 권고)'
+                  : fix.ok ? '수정 완료 (git 커밋 생성됨)' : vuln.statusText;
       setVulnerabilities((prev) =>
         prev.map((v) =>
           v.id === vuln.id
-            ? { ...v, status: fix.ok ? 'resolved' : v.status,
-                statusText: fix.ok ? '수정 완료 (git 커밋 생성됨)' : v.statusText,
+            ? { ...v, status: resolved ? 'resolved' : v.status, statusText: label,
                 ...(({ _pr: prInfo } as any)) }
             : v));
       setSelectedVuln((cur) => (cur.id === vuln.id
-        ? { ...cur, status: fix.ok ? 'resolved' : cur.status, ...(({ _pr: prInfo } as any)) }
+        ? { ...cur, status: resolved ? 'resolved' : cur.status, ...(({ _pr: prInfo } as any)) }
         : cur));
     } catch (e: any) {
       setScanError(`수정 생성 실패: ${e?.message || e}`);
@@ -250,6 +259,13 @@ export function App() {
         <div className="bg-[#fdecea] border-b border-[#f5c6c0] text-[#a11c10] px-4 py-2 text-[13px] text-center">
           스캔 실패: {scanError}
           <span className="text-[#7a1409]"> — 백엔드가 켜져 있는지(python web.py), 대상이 로컬/사설망인지 확인하세요.</span>
+        </div>
+      )}
+
+      {/* 정보성 안내(0건 등) */}
+      {scanNotice && !scanError && (
+        <div className="bg-[#e7f1fd] border-b border-[#bcd8f5] text-[#1a4d80] px-4 py-2 text-[13px] text-center">
+          {scanNotice}
         </div>
       )}
 

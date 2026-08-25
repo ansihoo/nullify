@@ -223,6 +223,35 @@ ${vuln.codeSnippet.afterCode.split('\n').map((l) => `+ ${l}`).join('\n')}
       {(() => {
         const pr = (vuln as any)._pr;
         if (!pr) return null;
+        if (pr.recommendation) {
+          return (
+            <div className="bg-[#e9f7f5] rounded-2xl border border-[#a6f0ea] p-6 space-y-2">
+              <h4 className="font-bold text-[16px] text-[#00504d] flex items-center gap-2">
+                <span className="material-symbols-outlined text-[18px]">settings_suggest</span>
+                설정 권고 — 소스 코드 수정 불필요
+              </h4>
+              <p className="text-[13.5px] text-[#3f6f6b]">
+                이 항목은 서버/프록시/배포 <strong>설정</strong>으로 해결합니다(코드 변경 아님). 아래 설정을 적용하세요:
+              </p>
+              <pre className="rounded-lg bg-[#181c1c] text-[#a5efe9] p-3 text-[12.5px] font-code overflow-x-auto whitespace-pre-wrap">{vuln.codeSnippet.afterCode}</pre>
+            </div>
+          );
+        }
+        if (pr.needsRepo) {
+          return (
+            <div className="bg-[#fef6e7] rounded-2xl border border-[#f0d9a8] p-6 space-y-2">
+              <h4 className="font-bold text-[15px] text-[#8a5a00] flex items-center gap-2">
+                <span className="material-symbols-outlined text-[18px]">folder_off</span>
+                소스 레포 연결이 필요합니다
+              </h4>
+              <p className="text-[13.5px] text-[#6b5416]">
+                이건 코드 레벨 취약점이라 <strong>실제 소스가 있어야</strong> 검증된 코드 패치·커밋을 만들 수 있어요.
+                URL 스캔만으로는 "여기가 터진다"까지만 알 수 있습니다.
+                상단 입력창에 <span className="font-code bg-white px-1.5 py-0.5 rounded border border-[#f0d9a8]">github.com/&lt;계정&gt;/&lt;레포&gt;</span> 를 넣어 다시 스캔하면 실제 코드 수정을 생성합니다.
+              </p>
+            </div>
+          );
+        }
         if (pr.error || pr.needsReview) {
           return (
             <div className="bg-[#fef6e7] rounded-2xl border border-[#f0d9a8] p-6 space-y-2">

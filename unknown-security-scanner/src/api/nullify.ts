@@ -225,7 +225,62 @@ function adapt(f: Finding, i: number, target: string): Vulnerability {
   // 뒤 단계(resolve/fix)에서 백엔드를 다시 부를 수 있도록 원본을 숨겨둔다.
   (v as any)._raw = f;
   (v as any)._target = target;
+  (v as any)._isRepo = false;   // DAST(URL) 결과 — 소스 없음
+  (v as any)._source = target;
   return v;
+}
+
+// ── SAST(소스 정적 탐지) 핀딩 → Vulnerability. DAST 와 달리 '미검증(정적)'이다. ──
+interface StaticFinding {
+  file: string; line: number; rule: string; message: string;
+  severity: string; kind: string;   // severity 는 이미 high|medium|low
+}
+
+function adaptStatic(f: StaticFinding, i: number, source: string): Vulnerability {
+  const typeLabel = TYPE_LABEL[f.kind] || f.kind;
+  const loc = `${f.file}:${f.line}`;
+  const guide = FIX_GUIDE[f.kind] || { fixDirection: '소스 레포를 연결하면 검증된 수정을 생성합니다.', tip: '' };
+  const v: Vulnerability = {
+    id: `${f.kind}-${slug(f.file)}-${f.line}-${i}`,
+    type: typeLabel,
+    endpoint: loc,
+    title: `${typeLabel} @ ${loc}`,
+    description: f.message || `${f.rule} (정적 탐지)`,
+    severity: (f.severity as VulnerabilitySeverity) || 'medium',
+    status: 'unresolved',
+    statusText: '정적 탐지 (미검증)',   // SAST 는 실행 재현 전이라 '미검증'을 명시
+    selected: i === 0,
+    aiGuide: {
+      title: `${typeLabel} (정적 탐지)`,
+      explanation: `${f.message}  — 규칙: ${f.rule}. 정적 분석 결과로, 실제 실행 재현(DAST) 전까지는 미검증입니다.`,
+      fixDirection: guide.fixDirection,
+      bestPracticeTip: guide.tip,
+    },
+    codeSnippet: {
+      fileName: f.file, problemLine: f.line || 1, fixLine: f.line || 1,
+      beforeCode: `// ${loc} — ${f.rule}\n// (소스 레포 연결 시 실제 코드/수정 diff 를 생성합니다)`,
+      afterCode: `// 검증된 수정은 '패치 생성'(레포 연결) 단계에서 만들어집니다.`,
+    },
+  };
+  (v as any)._raw = f;
+  (v as any)._source = source;
+  (v as any)._isRepo = true;    // 소스 레포 있음 → 실제 코드 수정 가능
+  return v;
+}
+
+// ── 입력이 git 레포인가, 런타임 URL 인가 판별 ──────────────────────────────
+const GIT_HOSTS = ['github.com', 'gitlab.com', 'bitbucket.org'];
+export function isGitRepo(input: string): boolean {
+  const s = input.trim();
+  if (/\.git(\/|$|\?)/.test(s)) return true;                 // ...repo.git
+  try {
+    const u = new URL(s);
+    if (GIT_HOSTS.includes(u.hostname.toLowerCase())) {
+      // github.com/<user>/<repo> 형태(사용자 프로필만 있는 건 제외)
+      return u.pathname.split('/').filter(Boolean).length >= 2;
+    }
+  } catch { /* URL 아님 → 아래로 */ }
+  return false;
 }
 
 function toNoise(f: Finding, i: number): FilteredNoiseItem {
@@ -276,6 +331,49 @@ function authHeaders(): Record<string, string> {
 }
 
 /**
+ * 소스 레포(SAST) 스캔 — git 레포 URL/경로를 받아 정적 탐지(/api/scan_source).
+ * 백엔드가 자동 clone 후 semgrep(없으면 내장 시크릿 스캔)을 돌린다.
+ * 정적 결과라 '미검증'이며, 소스가 있으므로 이후 '실제 코드 수정'이 가능하다.
+ */
+export async function scanSource(source: string): Promise<{
+  vulnerabilities: Vulnerability[];
+  filteredNoise: FilteredNoiseItem[];
+  isRepo: true;
+  raw: any;
+}> {
+  const url = `${API_BASE}/api/scan_source?source=${encodeURIComponent(source)}`;
+  const res = await fetch(url, { headers: authHeaders() });
+  if (!res.ok) throw new Error(`소스 스캔 오류 ${res.status}`);
+  const data = await res.json();
+  if (data.error) throw new Error(`소스 스캔 실패 — ${data.error}`);
+  const findings: StaticFinding[] = data.findings || [];
+  return {
+    vulnerabilities: findings.map((f, i) => adaptStatic(f, i, source)),
+    filteredNoise: [],   // SAST 는 '오탐 필터'가 없음(정적 탐지 자체가 후보)
+    isRepo: true,
+    raw: data,
+  };
+}
+
+/**
+ * 통합 입구 — 입력이 git 레포면 SAST, 런타임 URL 이면 DAST 로 자동 분기.
+ * (github 레포 링크를 넣으면 DAST 로 잘못 보내 권한거부로 '씹히던' 문제 해결)
+ */
+export async function scanInput(input: string): Promise<{
+  vulnerabilities: Vulnerability[];
+  filteredNoise: FilteredNoiseItem[];
+  isRepo: boolean;
+  source: string;
+}> {
+  if (isGitRepo(input)) {
+    const r = await scanSource(input);
+    return { vulnerabilities: r.vulnerabilities, filteredNoise: r.filteredNoise, isRepo: true, source: input };
+  }
+  const r = await scanTarget(input);
+  return { vulnerabilities: r.vulnerabilities, filteredNoise: r.filteredNoise, isRepo: false, source: input };
+}
+
+/**
  * IDOR '의도 확인' 답을 백엔드에 보낸다(/api/resolve).
  *   isPrivate=true  → owner_only → 백엔드가 CONFIRMED 승격(+ 토이앱은 닫힌 루프까지)
  *   isPrivate=false → public     → FALSE_POSITIVE(오탐, 목록에서 내림)
@@ -321,24 +419,65 @@ export interface FixResult {
   needsReview?: boolean;
   reason?: string;
   error?: string;
+  recommendation?: boolean; // 설정계열: 소스 수정 불필요, 설정 권고로 끝
+  needsRepo?: boolean;      // 코드계열인데 소스 레포가 없음 → 레포 연결 필요
+}
+
+// 설정계열 = 소스 코드가 아니라 서버/배포 설정으로 고치는 것 → 레포 없이도 수정 완결.
+const CONFIG_KINDS = ['headers', 'secret', 'component'];
+
+function isLocalDemo(target: string): boolean {
+  try {
+    const h = new URL(target).hostname;
+    return h === '127.0.0.1' || h === 'localhost';
+  } catch { return false; }
 }
 
 /**
- * 실제 git 브랜치·커밋으로 수정 생성(/api/pr). push/PR 만 사용자 인증 몫.
- * 백엔드: 카탈로그 규칙 → 없으면 LLM(fixgen, 키 있을 때) → 없으면 needs_review.
+ * 수정 생성 — 입력 종류에 따라 정직하게 분기한다:
+ *   1) 소스 레포 스캔(SAST) 결과 → /api/connect: clone 한 '실제 소스'를 고쳐 진짜 커밋.
+ *   2) DAST + 설정계열(헤더/시크릿/컴포넌트) → 소스 불필요. 설정 권고로 완결(recommendation).
+ *   3) DAST + 로컬 데모(토이앱 ↔ sample_repo) → /api/pr: 데모 레포에 실제 커밋.
+ *   4) DAST + 코드계열 + 임의 URL → 소스가 없어 코드 PR 불가 → 레포 연결 필요(needsRepo).
  */
 export async function generateFix(v: Vulnerability): Promise<FixResult> {
-  const raw = (v as any)._raw as Finding;
-  const url = `${API_BASE}/api/pr?kind=${encodeURIComponent(raw?.kind || '')}`;
-  const res = await fetch(url, { headers: authHeaders() });
-  if (!res.ok) return { ok: false, error: `PR 생성 실패 ${res.status}` };
-  const d = await res.json();
-  if (d.error) return { ok: false, error: d.error };
-  if (d.needs_review) return { ok: false, needsReview: true, reason: d.reason };
-  return {
-    ok: true, branch: d.branch, commit: d.commit, title: d.title,
-    diff: d.diff, gh: d.gh, fixSource: d.fix_source,
-  };
+  const raw = (v as any)._raw || {};
+  const kind = raw.kind || '';
+  const source = (v as any)._source as string;
+  const target = (v as any)._target as string;
+  const isRepo = !!(v as any)._isRepo;
+
+  // 1) 소스 레포가 있으면 실제 파일을 고친다(clone → create_fix).
+  if (isRepo && source) {
+    const url = `${API_BASE}/api/connect?source=${encodeURIComponent(source)}&kind=${encodeURIComponent(kind)}`;
+    const res = await fetch(url, { headers: authHeaders() });
+    if (!res.ok) return { ok: false, error: `레포 수정 실패 ${res.status}` };
+    const d = await res.json();
+    if (d.error) return { ok: false, error: d.error };
+    if (d.needs_review) return { ok: false, needsReview: true, reason: d.reason };
+    return { ok: true, branch: d.branch, commit: d.commit, title: d.title,
+             diff: d.diff, gh: d.gh, fixSource: d.fix_source };
+  }
+
+  // 2) 설정계열(DAST) → 소스 수정 불필요, 권고로 끝.
+  if (CONFIG_KINDS.includes(kind)) {
+    return { ok: true, recommendation: true };
+  }
+
+  // 3) 로컬 데모(토이앱)는 소스가 sample_repo 이므로 실제 커밋 시연 가능.
+  if (isLocalDemo(target || source)) {
+    const url = `${API_BASE}/api/pr?kind=${encodeURIComponent(kind)}`;
+    const res = await fetch(url, { headers: authHeaders() });
+    if (!res.ok) return { ok: false, error: `PR 생성 실패 ${res.status}` };
+    const d = await res.json();
+    if (d.error) return { ok: false, error: d.error };
+    if (d.needs_review) return { ok: false, needsReview: true, reason: d.reason };
+    return { ok: true, branch: d.branch, commit: d.commit, title: d.title,
+             diff: d.diff, gh: d.gh, fixSource: d.fix_source };
+  }
+
+  // 4) 임의 URL + 코드계열 → 소스가 없어 실제 코드 PR 불가.
+  return { ok: false, needsRepo: true };
 }
 
 /**
