@@ -81,7 +81,7 @@ class _LinkParser(HTMLParser):
         super().__init__()
         self.links = []          # href 문자열들
         self.scripts = []        # script src 들
-        self.forms = []          # (action, [input names])
+        self.forms = []          # (action, method, [input names])
         self._cur_form = None
 
     def handle_starttag(self, tag, attrs):
@@ -91,10 +91,12 @@ class _LinkParser(HTMLParser):
         elif tag == "script" and a.get("src"):
             self.scripts.append(a["src"])
         elif tag == "form":
-            self._cur_form = [a.get("action", ""), []]
+            # HTML 기본 method 는 GET. POST 폼은 검증기를 POST 로 찔러야 한다.
+            method = (a.get("method") or "get").strip().upper()
+            self._cur_form = [a.get("action", ""), ("POST" if method == "POST" else "GET"), []]
         elif tag in ("input", "textarea", "select") and self._cur_form is not None:
             if a.get("name"):
-                self._cur_form[1].append(a["name"])
+                self._cur_form[2].append(a["name"])
 
     def handle_endtag(self, tag):
         if tag == "form" and self._cur_form is not None:
@@ -134,20 +136,22 @@ def _same_origin(base, url):
     return (u.scheme, u.netloc) == (b.scheme, b.netloc)
 
 
-def _add_param_candidate(seen, out, path, param, scanner_label):
-    """(path, param, kind) 중복 제거하며 후보 추가."""
+def _add_param_candidate(seen, out, path, param, scanner_label, method="GET"):
+    """(path, param, kind, method) 중복 제거하며 후보 추가. method 는 GET/POST(폼)."""
     for kind in _kinds_for_param(param):
-        key = (kind, path, param)
+        key = (kind, path, param, method)
         if key in seen:
             continue
         seen.add(key)
-        out.append({"kind": kind, "path": path, "param": param, "scanner": scanner_label})
-    # 주문/계정류 경로면 IDOR 도 한 번(경로 기준, 파라미터 무관).
+        out.append({"kind": kind, "path": path, "param": param,
+                    "method": method, "scanner": scanner_label})
+    # 주문/계정류 경로면 IDOR 도 한 번(경로 기준, 파라미터 무관). IDOR 는 GET 열거라 method 고정.
     if any(h in path.lower() for h in IDOR_PATH_HINTS):
-        key = ("idor", path, "")
+        key = ("idor", path, "", "GET")
         if key not in seen:
             seen.add(key)
-            out.append({"kind": "idor", "path": path, "param": param, "scanner": scanner_label})
+            out.append({"kind": "idor", "path": path, "param": param,
+                        "method": "GET", "scanner": scanner_label})
 
 
 def crawl(base, max_pages=25, max_depth=2, timeout=5):
@@ -173,7 +177,7 @@ def crawl(base, max_pages=25, max_depth=2, timeout=5):
             k = ("headers", pu.path, "")
             if k not in seen_cand:
                 seen_cand.add(k)
-                out.append({"kind": "headers", "path": pu.path or "/", "param": "",
+                out.append({"kind": "headers", "path": pu.path or "/", "param": "", "method": "GET",
                             "scanner": "discover(crawl)"})
 
         # 이 URL 에 이미 쿼리 파라미터가 붙어 있으면 그것도 후보.
@@ -200,14 +204,15 @@ def crawl(base, max_pages=25, max_depth=2, timeout=5):
             if depth < max_depth and full.split("#")[0] not in visited:
                 queue.append((full, depth + 1))
 
-        # 폼: action 경로 + 각 input name 을 파라미터 후보로.
-        for action, names in parser.forms:
+        # 폼: action 경로 + 각 input name 을 파라미터 후보로. 폼의 method(GET/POST) 반영.
+        for action, method, names in parser.forms:
             full = urllib.parse.urljoin(norm, action or norm)
             if not _same_origin(base, full):
                 continue
             apath = urllib.parse.urlparse(full).path or "/"
+            label = "discover(form/%s)" % method.lower()
             for name in names:
-                _add_param_candidate(seen_cand, out, apath, name, "discover(form)")
+                _add_param_candidate(seen_cand, out, apath, name, label, method)
 
         # 스크립트: .js 는 시크릿·컴포넌트 검증 후보.
         for src in parser.scripts:
@@ -219,7 +224,7 @@ def crawl(base, max_pages=25, max_depth=2, timeout=5):
                 k = (kind, spath, "")
                 if k not in seen_cand:
                     seen_cand.add(k)
-                    out.append({"kind": kind, "path": spath, "param": "",
+                    out.append({"kind": kind, "path": spath, "param": "", "method": "GET",
                                 "scanner": "discover(crawl)"})
     return out
 
@@ -244,7 +249,7 @@ def probe(base, timeout=4):
         k = (kind, path, "")
         if k not in seen_cand:
             seen_cand.add(k)
-            out.append({"kind": kind, "path": path, "param": "", "scanner": "discover(probe)"})
+            out.append({"kind": kind, "path": path, "param": "", "method": "GET", "scanner": "discover(probe)"})
     return out
 
 
@@ -257,7 +262,7 @@ def discover(base, max_pages=25, max_depth=2, timeout=5):
     max_pages = int(os.environ.get("NULLIFY_CRAWL_PAGES", max_pages))
     merged, seen = [], set()
     for c in crawl(base, max_pages, max_depth, timeout) + probe(base, timeout):
-        key = (c["kind"], c["path"], c["param"])
+        key = (c["kind"], c["path"], c["param"], c.get("method", "GET"))
         if key in seen:
             continue
         seen.add(key)

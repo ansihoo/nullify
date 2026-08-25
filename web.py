@@ -109,20 +109,20 @@ def secrets_from(body):
     return [ln.split(",")[0] for ln in body.splitlines() if "-secret" in ln]
 
 
-def scan_sqli(base, path, param="id"):
+def scan_sqli(base, path, param="id", method="GET"):
     url = base + path
-    v, reason, _ = verify_sqli(url, param)
-    f = {"type": "SQL Injection", "endpoint": path, "verdict": v, "reason": reason}
+    v, reason, _ = verify_sqli(url, param, method=method)
+    f = {"type": "SQL Injection", "endpoint": path, "verdict": v, "reason": reason, "method": method}
     if v != "CONFIRMED":
         f["severity"] = "info"
         return f
-    find_column_count(url, param)
-    _, body = union_extract(url, "secret, name FROM users", param)
+    find_column_count(url, param, method=method)
+    _, body = union_extract(url, "secret, name FROM users", param, method=method)
     before = secrets_from(body)
     patch = patch_for("sqli")
     control(base, "sqli", "safe")                      # 패치 배포(= CI 재배포 대역)
-    va, _, _ = verify_sqli(url, param)
-    _, body_a = union_extract(url, "secret, name FROM users", param)
+    va, _, _ = verify_sqli(url, param, method=method)
+    _, body_a = union_extract(url, "secret, name FROM users", param, method=method)
     after = secrets_from(body_a)
     control(base, "sqli", "vuln")                      # 데모 반복 위해 원복
     f.update(severity="critical", proof_label="훔친 secret", proof=before, patch=patch,
@@ -132,16 +132,16 @@ def scan_sqli(base, path, param="id"):
     return f
 
 
-def scan_xss(base, path, param="q"):
+def scan_xss(base, path, param="q", method="GET"):
     url = base + path
-    v, reason, ev = verify_xss(url, param)
-    f = {"type": "Reflected XSS", "endpoint": path, "verdict": v, "reason": reason}
+    v, reason, ev = verify_xss(url, param, method=method)
+    f = {"type": "Reflected XSS", "endpoint": path, "verdict": v, "reason": reason, "method": method}
     if v != "CONFIRMED":
         f["severity"] = "info"
         return f
     patch = patch_for("xss")
     control(base, "xss", "safe")
-    va, _, _ = verify_xss(url, param)
+    va, _, _ = verify_xss(url, param, method=method)
     control(base, "xss", "vuln")
     f.update(severity="critical", proof_label="반사된 실행형 페이로드",
              proof=[ev.get("reflected_raw", "")], patch=patch,
@@ -151,16 +151,16 @@ def scan_xss(base, path, param="q"):
     return f
 
 
-def scan_traversal(base, path, param="file"):
+def scan_traversal(base, path, param="file", method="GET"):
     url = base + path
-    v, reason, ev = verify_traversal(url, param)
-    f = {"type": "Path Traversal", "endpoint": path, "verdict": v, "reason": reason}
+    v, reason, ev = verify_traversal(url, param, method=method)
+    f = {"type": "Path Traversal", "endpoint": path, "verdict": v, "reason": reason, "method": method}
     if v != "CONFIRMED":
         f["severity"] = "info"
         return f
     patch = patch_for("traversal")
     control(base, "traversal", "safe")
-    va, _, _ = verify_traversal(url, param)
+    va, _, _ = verify_traversal(url, param, method=method)
     control(base, "traversal", "vuln")
     f.update(severity="critical", proof_label="유출된 파일 내용",
              proof=[ev.get("response", "")], patch=patch,
@@ -176,15 +176,15 @@ def _receipt(before_v, after_v):
             "fixed": after_v == "FALSE_POSITIVE"}
 
 
-def scan_cmdi(base, path, param="host"):
+def scan_cmdi(base, path, param="host", method="GET"):
     url = base + path
-    v, reason, ev = verify_cmdi(url, param)
-    f = {"type": "Command Injection", "endpoint": path, "verdict": v, "reason": reason}
+    v, reason, ev = verify_cmdi(url, param, method=method)
+    f = {"type": "Command Injection", "endpoint": path, "verdict": v, "reason": reason, "method": method}
     if v != "CONFIRMED":
         f["severity"] = "info"
         return f
     patch = patch_for("cmdi")
-    control(base, "cmdi", "safe"); va, _, _ = verify_cmdi(url, param); control(base, "cmdi", "vuln")
+    control(base, "cmdi", "safe"); va, _, _ = verify_cmdi(url, param, method=method); control(base, "cmdi", "vuln")
     f.update(severity="critical", proof_label="실행 증거", proof=[ev.get("response", "")],
              patch=patch, receipt=_receipt(v, va))
     return f
@@ -321,17 +321,19 @@ def resolve_idor(base, answer, path="/order", param="id"):
                         "note": "재검증(패치 후 죽음 증명)엔 인증/소유권 컨텍스트 필요 — 자동 닫힌루프 불가."}}
 
 
+# 람다는 (base, path, param, method) 를 받는다. method(GET/POST)는 검증기가
+# 지원하는 4종(sqli/xss/traversal/cmdi)만 실제로 쓰고, 나머지는 무시한다.
 SCANNERS = {
-    "sqli": lambda b, p, pr: scan_sqli(b, p, pr or "id"),
-    "xss": lambda b, p, pr: scan_xss(b, p, pr or "q"),
-    "traversal": lambda b, p, pr: scan_traversal(b, p, pr or "file"),
-    "cmdi": lambda b, p, pr: scan_cmdi(b, p, pr or "host"),
-    "redirect": lambda b, p, pr: scan_redirect(b, p, pr or "next"),
-    "ssrf": lambda b, p, pr: scan_ssrf(b, p, pr or "url"),
-    "secret": lambda b, p, pr: scan_secret(b, p),
-    "headers": lambda b, p, pr: scan_headers(b, p),
-    "component": lambda b, p, pr: scan_component(b, p),
-    "idor": lambda b, p, pr: scan_idor(b, p or "/order", pr or "id"),
+    "sqli": lambda b, p, pr, m: scan_sqli(b, p, pr or "id", m),
+    "xss": lambda b, p, pr, m: scan_xss(b, p, pr or "q", m),
+    "traversal": lambda b, p, pr, m: scan_traversal(b, p, pr or "file", m),
+    "cmdi": lambda b, p, pr, m: scan_cmdi(b, p, pr or "host", m),
+    "redirect": lambda b, p, pr, m: scan_redirect(b, p, pr or "next"),
+    "ssrf": lambda b, p, pr, m: scan_ssrf(b, p, pr or "url"),
+    "secret": lambda b, p, pr, m: scan_secret(b, p),
+    "headers": lambda b, p, pr, m: scan_headers(b, p),
+    "component": lambda b, p, pr, m: scan_component(b, p),
+    "idor": lambda b, p, pr, m: scan_idor(b, p or "/order", pr or "id"),
 }
 
 
@@ -366,7 +368,8 @@ def run_scan(base, prefer_discover=False):
     for c in candidates:
         fn = SCANNERS.get(c["kind"])
         if fn:
-            f = fn(base, c["path"], c.get("param", ""))   # 파라미터명은 스캐너 후보에서
+            # 파라미터명·요청방식(GET/POST)은 후보에서. 폼 후보는 POST 를 실어 온다.
+            f = fn(base, c["path"], c.get("param", ""), c.get("method", "GET"))
         else:                                  # 검증기 없는 종류는 정직하게 UNKNOWN
             f = {"type": c["kind"], "endpoint": c["path"], "verdict": "UNKNOWN",
                  "severity": "info", "reason": "이 종류의 검증기가 아직 없음"}
