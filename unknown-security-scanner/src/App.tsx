@@ -18,7 +18,7 @@ import {
   INITIAL_SCAN_HISTORY,
 } from './data/mockSecurityData';
 import { Vulnerability, ChatMessage, ScanHistoryRecord, FilteredNoiseItem } from './types';
-import { scanEntry, resolveIntent, generateFix, rescanTarget } from './api/nullify';
+import { scanEntry, resolveIntent, generateFix, rescanTarget, scanSource } from './api/nullify';
 
 // ── 스캔 세션(대화) 로컬 히스토리 — 브라우저 localStorage 에 저장, 스캔마다 갱신 ──
 const SESS_KEY = 'nullify_sessions';
@@ -31,6 +31,8 @@ interface ScanSession {
   summary: { total: number; crit: number; ques: number; warn: number };
   vulnerabilities: Vulnerability[];
   filteredNoise: FilteredNoiseItem[];
+  rawUrl?: string;    // 재검증 라우팅용 원본(구세션엔 없을 수 있어 optional)
+  rawRepo?: string;
 }
 function loadSessions(): ScanSession[] {
   try { return JSON.parse(localStorage.getItem(SESS_KEY) || '[]'); } catch { return []; }
@@ -63,6 +65,10 @@ export function App() {
   const [currentTab, setCurrentTab] = useState<'landing' | 'scanning' | 'analysis' | 'fix' | 'verify' | 'clear'>('landing');
   // 백엔드는 로컬 전용(127.0.0.1) + 공개 URL 거부이므로 기본 대상은 데모 과녁 앱.
   const [repoUrl, setRepoUrl] = useState<string>('http://127.0.0.1:8009');
+  // 재검증에 쓸 '원본' 값 — repoUrl 은 표시용 합성문자열("url  +  repo")이라 재검증 target 으로
+  // 쓰면 host 파싱이 깨져 권한거부가 난다. 순수 url/repo 를 따로 보존해 라우팅에 쓴다.
+  const [rawUrl, setRawUrl] = useState<string>('http://127.0.0.1:8009');
+  const [rawRepo, setRawRepo] = useState<string>('');
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanNotice, setScanNotice] = useState<string | null>(null);   // 0건 등 정보성 안내
   const [canFix, setCanFix] = useState<boolean>(false);   // 소스 레포가 있어 '수정' 제공 가능?
@@ -103,6 +109,8 @@ export function App() {
   // Handlers — 사이트 URL(선택) + 레포(선택) 를 함께 받는다.
   const handleStartScan = async (url: string, repo: string = '') => {
     setRepoUrl(repo ? `${url || repo}${url && repo ? '  +  ' + repo : ''}` : url);
+    setRawUrl(url);        // 재검증 라우팅용 원본 보존(표시용 합성문자열과 분리)
+    setRawRepo(repo);
     setScanError(null);
     setScanNotice(null);
     setCurrentTab('scanning');
@@ -139,6 +147,7 @@ export function App() {
         label: labelOf(url, repo),
         ts: new Date().toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
         mode, canFix, summary, vulnerabilities: vulns, filteredNoise: noise,
+        rawUrl: url, rawRepo: repo,   // 세션 복원 후에도 재검증이 되도록 원본 보존
       };
       setSessions((prev) => { const next = [session, ...prev].slice(0, 50); persistSessions(next); return next; });
 
@@ -171,6 +180,8 @@ export function App() {
     setCanFix(s.canFix);
     if (s.vulnerabilities.length) setSelectedVuln(s.vulnerabilities[0]);
     setRepoUrl(s.label);
+    setRawUrl(s.rawUrl ?? '');       // 원본 복원(구세션이면 없음 → 재검증은 취약점 _source 로 폴백)
+    setRawRepo(s.rawRepo ?? '');
     setActiveSessionId(id);
     setScanError(null);
     // 0건 세션은 전용 클린 화면으로 복원.
@@ -285,12 +296,53 @@ export function App() {
     }
   };
 
-  // 재검증: 백엔드가 패치 후 같은 공격을 다시 돌려 이전 스캔과 비교.
+  // 재검증: 패치 배포/푸시 뒤 '같은 검사'를 다시 돌려 죽음을 확인한다.
+  //  - 소스취약점(시크릿 등)은 SAST 라서 URL 재검증(DAST)엔 절대 안 잡힌다 → repo 를 최신 clone 해
+  //    scanSource 로 재스캔한다.  런타임취약점(헤더 등)은 rescanTarget(DAST).  둘 다면 합친다.
+  //  - before(현재 화면) 대비 재검증 결과에서 사라진 취약점 = '재현 안 됨' = 죽음 → resolved +
+  //    receipt.afterResponse.vulnerable=false (VerificationView 의 '증명완료' 계약).
+  const rescanKey = (v: Vulnerability) =>
+    `${(v as any)._raw?.kind || v.type}|${v.endpoint || (v as any)._raw?.file || ''}`;
+
   const handleRescan = async () => {
     try {
-      const { vulnerabilities: vulns, filteredNoise: noise } = await rescanTarget(repoUrl);
-      setVulnerabilities(vulns);
+      // 원본이 비었으면(구세션) 취약점에 심긴 _source 에서 repo 를 폴백 복원.
+      const repo = rawRepo || (vulnerabilities.map((v) => (v as any)._source).find(Boolean) ?? '');
+      const url = rawUrl && !rawUrl.includes('  +  ') ? rawUrl : '';
+
+      let after: Vulnerability[] = [];
+      let noise = filteredNoise;
+      if (repo) {
+        const r = await scanSource(repo);          // 최신 clone → SAST 재검증(시크릿 죽음 확인)
+        after = after.concat(r.vulnerabilities);
+      }
+      if (url) {
+        const r = await rescanTarget(url);         // DAST 재검증(헤더 등 런타임 죽음 확인)
+        after = after.concat(r.vulnerabilities);
+        noise = r.filteredNoise;
+      }
+      if (!repo && !url) { setScanError('재검증 대상 원본을 찾지 못했습니다(새로 스캔 후 시도).'); return; }
+
+      const alive = new Set(after.map(rescanKey));  // 재검증에서 '여전히 재현되는' 키 집합
+      const updated = vulnerabilities.map((v) => {
+        if (v.status === 'ignored') return v;       // 이미 오탐 처리된 건 건드리지 않음
+        if (alive.has(rescanKey(v))) {
+          // 여전히 살아있음 → 죽음 표식 해제(있었다면).
+          const r = (v as any).receipt;
+          if (r?.afterResponse) delete r.afterResponse.vulnerable;
+          return { ...v, status: 'unresolved', statusText: '재현됨 (아직 미해결)' };
+        }
+        // 사라짐 = 재현 안 됨 = 죽음 확인.
+        return {
+          ...v,
+          status: 'resolved',
+          statusText: '증명완료 (재검증으로 죽음 확인)',
+          receipt: { ...((v as any).receipt || {}), afterResponse: { vulnerable: false } },
+        } as Vulnerability;
+      });
+      setVulnerabilities(updated);
       setFilteredNoise(noise);
+      if (updated.length) setSelectedVuln(updated[0]);
     } catch (e: any) {
       setScanError(`재검증 실패: ${e?.message || e}`);
     }

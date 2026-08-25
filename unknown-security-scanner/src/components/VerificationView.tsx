@@ -145,8 +145,17 @@ export const VerificationView: React.FC<VerificationViewProps> = ({
                 ? '첫 재검증 대기 중'
                 : `다음 자동 재검증까지 ${fmtCooldown(cooldownLeft)}`}
             </span>
-
           </div>
+          {/* 수동 재검증 — 자동은 lastScan!==0 게이트라 첫 재검증을 못 띄운다. 데모/즉시 검증용. */}
+          <button
+            id="btn-manual-rescan"
+            onClick={runRescan}
+            disabled={isRetesting}   /* 수동은 의도적 행동 — 24h 쿨다운(자동 전용)에 묶지 않는다. 패치 직후 즉시 재검증용. */
+            className="inline-flex items-center gap-1.5 bg-[#005652] text-white text-[13px] font-bold px-3.5 py-2 rounded-lg hover:bg-[#1f6f6b] disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm"
+          >
+            <span className={`material-symbols-outlined text-[18px] ${isRetesting ? 'animate-spin' : ''}`}>sync</span>
+            {isRetesting ? '재검증 중…' : '지금 재검증'}
+          </button>
         </div>
       </div>
         );

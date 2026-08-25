@@ -832,7 +832,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 source = q.get("source", [SAMPLE_REPO])[0]
                 try:
                     with REPO_LOCK:
-                        findings, src = sast.scan(source)
+                        # source 가 원격 URL 이면 매 호출마다 새로 clone 해서 스캔한다.
+                        # 재검증의 본질 = "패치가 배포/푸시된 뒤 같은 검사를 다시 돌려 죽음을 확인".
+                        # 소스 취약점(시크릿 등)은 GitHub 최신 상태를 봐야 하므로 캐시 없이 새로 clone.
+                        scan_path = source
+                        if source.startswith(("http://", "https://")):
+                            scan_path = github_pr.connect_repo(source)   # tempfile 에 최신 clone
+                        findings, src = sast.scan(scan_path)
                     self._json({"source": source, "scanner": src, "findings": findings})
                 except Exception as e:
                     self._json({"error": str(e)})
