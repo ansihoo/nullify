@@ -34,11 +34,11 @@ from verifiers.verify_component import verify as verify_component
 from verifiers.exploit_sqli import find_column_count, union_extract
 from discovery.ingest import load_candidates
 from authorize import authorize
-from fixes import FIXES
+from remediation.fixes import FIXES
 import discovery.scanner as scanner
 import discovery.sast as sast
 import combine
-import github_pr
+import remediation.github_pr as github_pr
 import store
 import notify
 from collections import deque

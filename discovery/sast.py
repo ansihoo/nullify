@@ -14,7 +14,7 @@ import shutil
 import subprocess
 
 import discovery.scan_source as scan_source
-import github_pr
+import remediation.github_pr as github_pr
 
 SEV_MAP = {"ERROR": "high", "WARNING": "medium", "INFO": "low"}
 

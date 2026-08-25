@@ -14,8 +14,8 @@ import textwrap
 import tempfile
 import subprocess
 
-import fixgen
-from fixes import FIXES, build_app_py
+import remediation.fixgen as fixgen
+from remediation.fixes import FIXES, build_app_py
 
 
 def _git(repo, *args):
