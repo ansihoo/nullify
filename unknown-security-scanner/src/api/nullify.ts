@@ -373,6 +373,56 @@ export async function scanInput(input: string): Promise<{
   return { vulnerabilities: r.vulnerabilities, filteredNoise: r.filteredNoise, isRepo: false, source: input };
 }
 
+export type ScanMode = 'detect' | 'source' | 'combined';
+
+/**
+ * 통합 진입점 — 사이트 URL(선택) + 레포(선택)를 함께 받아 흐름을 정한다:
+ *   - URL 만       → DAST '탐지 전용'(수정 불가, _canFix=false)
+ *   - 레포만       → SAST(소스 있음 → 수정 가능)
+ *   - URL + 레포   → 완전체: DAST 런타임 증거 + 소스. 상관(evidence)까지, 수정 가능.
+ * 수정 가능 여부(_canFix)와 증거등급(_evidence)을 각 취약점에 심어 돌려준다.
+ */
+export async function scanEntry(urlIn: string, repoIn: string): Promise<{
+  vulnerabilities: Vulnerability[];
+  filteredNoise: FilteredNoiseItem[];
+  mode: ScanMode;
+  canFix: boolean;
+}> {
+  let url = (urlIn || '').trim();
+  let repo = (repoIn || '').trim();
+  // URL 칸에 레포를 넣었으면 레포로 취급(관용).
+  if (url && isGitRepo(url) && !repo) { repo = url; url = ''; }
+
+  const canFix = !!repo;                 // 소스가 있어야 수정 가능
+  const dast = url ? await scanTarget(url) : { vulnerabilities: [], filteredNoise: [] as FilteredNoiseItem[] };
+  const sast = repo ? await scanSource(repo) : { vulnerabilities: [] as Vulnerability[] };
+
+  const mode: ScanMode = (url && repo) ? 'combined' : (repo ? 'source' : 'detect');
+  const sastKinds = new Set(sast.vulnerabilities.map((v) => (v as any)._raw?.kind));
+
+  // DAST 취약점: 수정 가능여부·소스·증거등급을 심는다.
+  for (const v of dast.vulnerabilities) {
+    const kind = (v as any)._raw?.kind;
+    (v as any)._canFix = canFix;
+    if (repo) { (v as any)._source = repo; (v as any)._isRepo = true; }   // 소스 붙으면 실제 코드 수정 경로로
+    (v as any)._evidence = sastKinds.has(kind) ? 'static+dynamic' : 'dynamic';
+  }
+  // SAST 취약점: DAST 로 이미 잡힌 kind 는 동적 카드로 대표되므로, 그 외(정적만)만 추가.
+  const dastKinds = new Set(dast.vulnerabilities.map((v) => (v as any)._raw?.kind));
+  const staticOnly = sast.vulnerabilities.filter((v) => !dastKinds.has((v as any)._raw?.kind));
+  for (const v of staticOnly) {
+    (v as any)._canFix = true;            // 소스 있으니 수정 가능
+    (v as any)._evidence = 'static-only';
+  }
+
+  return {
+    vulnerabilities: [...dast.vulnerabilities, ...staticOnly],
+    filteredNoise: dast.filteredNoise,
+    mode,
+    canFix,
+  };
+}
+
 /**
  * IDOR '의도 확인' 답을 백엔드에 보낸다(/api/resolve).
  *   isPrivate=true  → owner_only → 백엔드가 CONFIRMED 승격(+ 토이앱은 닫힌 루프까지)
@@ -421,6 +471,7 @@ export interface FixResult {
   error?: string;
   recommendation?: boolean; // 설정계열: 소스 수정 불필요, 설정 권고로 끝
   needsRepo?: boolean;      // 코드계열인데 소스 레포가 없음 → 레포 연결 필요
+  detectionOnly?: boolean;  // URL 만 받은 탐지 전용 모드 → 수정 자체를 제공 안 함
 }
 
 // 설정계열 = 소스 코드가 아니라 서버/배포 설정으로 고치는 것 → 레포 없이도 수정 완결.
@@ -446,6 +497,13 @@ export async function generateFix(v: Vulnerability): Promise<FixResult> {
   const source = (v as any)._source as string;
   const target = (v as any)._target as string;
   const isRepo = !!(v as any)._isRepo;
+  const canFix = (v as any)._canFix;
+
+  // 0) 탐지 전용(URL만 받음) → 수정 제공 안 함. 소스 레포를 함께 올려야 수정 가능.
+  if (canFix === false) {
+    return { ok: false, detectionOnly: true,
+             reason: '탐지 전용 모드 — 소스 레포를 함께 올리면 검증된 수정을 생성합니다.' };
+  }
 
   // 1) 소스 레포가 있으면 실제 파일을 고친다(clone → create_fix).
   if (isRepo && source) {

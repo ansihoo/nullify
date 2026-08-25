@@ -8,6 +8,7 @@ interface FixDiffViewProps {
   onNavigateToVerify: () => void;
   onSelectVuln: (vuln: Vulnerability) => void;
   allVulnerabilities: Vulnerability[];
+  canFix?: boolean;   // 소스 레포가 있어야 실제 수정 제공(없으면 탐지 전용)
 }
 
 export const FixDiffView: React.FC<FixDiffViewProps> = ({
@@ -16,6 +17,7 @@ export const FixDiffView: React.FC<FixDiffViewProps> = ({
   onNavigateToVerify,
   onSelectVuln,
   allVulnerabilities,
+  canFix = false,
 }) => {
   const [agreedToGit, setAgreedToGit] = useState<boolean>(true);
   const [isPatchCreated, setIsPatchCreated] = useState<boolean>(vuln.status === 'resolved');
@@ -180,7 +182,22 @@ ${vuln.codeSnippet.afterCode.split('\n').map((l) => `+ ${l}`).join('\n')}
 
       </div>
 
-      {/* Action Card & Consent Box */}
+      {/* 탐지 전용(URL만) — 수정 액션 대신 안내 */}
+      {!canFix ? (
+      <div className="bg-[#eef4f3] rounded-2xl border border-[#cfe0dd] p-6 flex items-start gap-3">
+        <span className="material-symbols-outlined text-[#1f6f6b] text-[22px]">travel_explore</span>
+        <div>
+          <h4 className="font-bold text-[15px] text-[#1f4d49]">탐지 전용 모드 — 발견까지만 제공</h4>
+          <p className="text-[13.5px] text-[#3f5f5b] mt-1">
+            사이트 URL만 받으면 "어디가 터지는지"까지만 알 수 있어요(소스가 없어 코드 수정 불가).
+            검증된 코드 수정과 PR을 받으려면 <strong>GitHub 레포도 함께</strong> 올려 다시 스캔하세요.
+            {['headers','secret','component'].includes(((vuln as any)._raw?.kind)||'') &&
+              ' (이 항목은 설정 계열이라, 위 "수정 제안"의 설정을 서버/프록시에 그대로 적용하면 됩니다.)'}
+          </p>
+        </div>
+      </div>
+      ) : (
+      /* Action Card & Consent Box */
       <div className="bg-white rounded-2xl border border-[#bec9c7] p-6 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
         <div className="flex items-center gap-3">
           <input
@@ -218,6 +235,7 @@ ${vuln.codeSnippet.afterCode.split('\n').map((l) => `+ ${l}`).join('\n')}
           )}
         </div>
       </div>
+      )}
 
       {/* 실제 git 수정 결과 (백엔드 /api/pr) */}
       {(() => {

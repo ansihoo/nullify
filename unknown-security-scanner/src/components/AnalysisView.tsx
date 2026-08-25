@@ -10,6 +10,7 @@ interface AnalysisViewProps {
   onNavigateToFix: (vuln: Vulnerability) => void;
   onAskAI: (question: string) => void;
   isAiLoading?: boolean;
+  canFix?: boolean;   // 소스 레포 있음 → '수정' 제공 가능
 }
 
 export const AnalysisView: React.FC<AnalysisViewProps> = ({
@@ -21,6 +22,7 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
   onNavigateToFix,
   onAskAI,
   isAiLoading,
+  canFix = false,
 }) => {
   const [isNoiseExpanded, setIsNoiseExpanded] = useState<boolean>(false);
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
@@ -165,7 +167,7 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
                           className="text-[#005652] font-semibold hover:underline flex items-center gap-1"
                         >
                           <span className="material-symbols-outlined text-[15px]">code</span>
-                          수정 코드 보기
+                          {canFix ? '수정 코드 보기' : '상세 보기'}
                         </button>
                         {vuln.requiresIntentConfirmation && (
                           <button

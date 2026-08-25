@@ -17,7 +17,7 @@ import {
   INITIAL_SCAN_HISTORY,
 } from './data/mockSecurityData';
 import { Vulnerability, ChatMessage, ScanHistoryRecord } from './types';
-import { scanInput, resolveIntent, generateFix, rescanTarget } from './api/nullify';
+import { scanEntry, resolveIntent, generateFix, rescanTarget } from './api/nullify';
 
 export function App() {
   const [currentTab, setCurrentTab] = useState<'landing' | 'scanning' | 'analysis' | 'fix' | 'verify'>('landing');
@@ -25,6 +25,7 @@ export function App() {
   const [repoUrl, setRepoUrl] = useState<string>('http://127.0.0.1:8009');
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanNotice, setScanNotice] = useState<string | null>(null);   // 0건 등 정보성 안내
+  const [canFix, setCanFix] = useState<boolean>(false);   // 소스 레포가 있어 '수정' 제공 가능?
   const scanningRef = useRef<boolean>(false);   // 실제 스캔 진행중? (애니메이션과 경합 방지)
   const [vulnerabilities, setVulnerabilities] = useState<Vulnerability[]>(INITIAL_VULNERABILITIES);
   const [selectedVuln, setSelectedVuln] = useState<Vulnerability>(INITIAL_VULNERABILITIES[0]);
@@ -53,22 +54,27 @@ export function App() {
   ]);
   const [isAiLoading, setIsAiLoading] = useState<boolean>(false);
 
-  // Handlers
-  const handleStartScan = async (targetUrl: string) => {
-    setRepoUrl(targetUrl);
+  // Handlers — 사이트 URL(선택) + 레포(선택) 를 함께 받는다.
+  const handleStartScan = async (url: string, repo: string = '') => {
+    setRepoUrl(repo ? `${url || repo}${url && repo ? '  +  ' + repo : ''}` : url);
     setScanError(null);
     setScanNotice(null);
     setCurrentTab('scanning');
     scanningRef.current = true;
     try {
-      // 입력 종류로 자동 분기: git 레포 URL → SAST(소스), 런타임 URL → DAST.
-      const { vulnerabilities: vulns, filteredNoise: noise, isRepo } = await scanInput(targetUrl);
+      // URL만 → 탐지 전용 / 레포만 → SAST / 둘다 → 완전체(수정 가능).
+      const { vulnerabilities: vulns, filteredNoise: noise, mode, canFix } = await scanEntry(url, repo);
       setVulnerabilities(vulns);
       setFilteredNoise(noise);
+      setCanFix(canFix);
       if (vulns.length) setSelectedVuln(vulns[0]);
-      else setScanNotice(isRepo
+      else setScanNotice(mode === 'source'
         ? '정적 탐지 0건 — 이 레포엔 하드코딩 시크릿이 없습니다. 깊은 코드 분석(SQLi/XSS 등)은 서버에 semgrep 설치 시 활성화됩니다.'
+        : mode === 'combined'
+        ? '재현/정적 모두에서 취약점을 찾지 못했습니다.'
         : '발견된 취약점 없음 — 이 대상에서 재현되는 취약점을 찾지 못했습니다.');
+      if (vulns.length && mode === 'detect') setScanNotice(
+        '탐지 전용 모드 — 발견만 표시합니다. 검증된 수정/PR을 받으려면 소스 레포도 함께 올리세요.');
     } catch (e: any) {
       setScanError(e?.message || String(e));
       setVulnerabilities([]);
@@ -145,7 +151,8 @@ export function App() {
       const prInfo = fix.ok
         ? { branch: fix.branch, commit: fix.commit, title: fix.title, gh: fix.gh,
             fixSource: fix.fixSource, recommendation: fix.recommendation }
-        : { error: fix.error, needsReview: fix.needsReview, needsRepo: fix.needsRepo, reason: fix.reason };
+        : { error: fix.error, needsReview: fix.needsReview, needsRepo: fix.needsRepo,
+            detectionOnly: fix.detectionOnly, reason: fix.reason };
       // 설정 권고(recommendation)도 '해결'로 본다(소스 수정 불필요). 코드 PR 실패는 상태 유지.
       const resolved = fix.ok;
       const label = fix.recommendation ? '수정 완료 (설정 권고)'
@@ -310,6 +317,7 @@ export function App() {
               onNavigateToFix={handleNavigateToFix}
               onAskAI={handleAskAI}
               isAiLoading={isAiLoading}
+              canFix={canFix}
             />
           )}
 
@@ -320,6 +328,7 @@ export function App() {
               onNavigateToVerify={handleNavigateToVerify}
               onSelectVuln={handleSelectVuln}
               allVulnerabilities={vulnerabilities}
+              canFix={canFix}
             />
           )}
 

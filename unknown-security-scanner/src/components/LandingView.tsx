@@ -1,22 +1,28 @@
 import React, { useState } from 'react';
 
 interface LandingViewProps {
-  onStartScan: (repoUrl: string) => void;
+  onStartScan: (url: string, repo: string) => void;
 }
 
 export const LandingView: React.FC<LandingViewProps> = ({ onStartScan }) => {
-  const [inputUrl, setInputUrl] = useState('');
+  const [inputUrl, setInputUrl] = useState('');    // 사이트 URL (DAST 대상)
+  const [inputRepo, setInputRepo] = useState('');  // GitHub 레포 (SAST + 수정)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // 백엔드는 로컬/사설망만 스캔(공개 URL 거부). 기본 대상 = 로컬 데모 과녁.
-    const target = inputUrl.trim() || 'http://127.0.0.1:8009';
-    onStartScan(target);
+    const url = inputUrl.trim();
+    const repo = inputRepo.trim();
+    if (!url && !repo) {
+      // 둘 다 비면 로컬 데모 과녁으로(탐지 전용).
+      onStartScan('http://127.0.0.1:8009', '');
+      return;
+    }
+    onStartScan(url, repo);
   };
 
   const handleSelectSample = (sampleUrl: string) => {
-    setInputUrl(sampleUrl);
-    onStartScan(sampleUrl);
+    setInputRepo(sampleUrl);
+    onStartScan('', sampleUrl);
   };
 
   return (
@@ -36,31 +42,45 @@ export const LandingView: React.FC<LandingViewProps> = ({ onStartScan }) => {
         <div className="w-full max-w-2xl flex flex-col items-center">
           <form
             onSubmit={handleSubmit}
-            className="w-full bg-white border border-[#bec9c7] rounded-xl p-2 flex items-center gap-2 custom-shadow focus-shadow transition-all duration-300"
+            className="w-full bg-white border border-[#bec9c7] rounded-xl p-3 flex flex-col gap-2 custom-shadow focus-shadow transition-all duration-300"
           >
-            <span className="material-symbols-outlined text-[#6f7978] ml-3 text-[22px] select-none">
-              link
-            </span>
-            <input
-              id="landing-repo-input"
-              type="text"
-              value={inputUrl}
-              onChange={(e) => setInputUrl(e.target.value)}
-              placeholder="URL 또는 GitHub 저장소 링크를 입력하세요"
-              className="flex-grow border-none focus:outline-none focus:ring-0 bg-transparent text-[16px] placeholder-[#bec9c7] text-[#181c1c] font-code px-2 py-1"
-            />
-            <button
-              id="landing-submit-btn"
-              type="submit"
-              className="bg-[#1f6f6b] text-white px-6 py-3 rounded-lg font-medium text-[15px] whitespace-nowrap hover:bg-[#005652] active:scale-95 transition-all flex items-center gap-2 shadow-sm cursor-pointer"
-            >
-              <span>연결하기</span>
-              <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
-            </button>
+            {/* 사이트 URL — DAST(런타임 탐지) */}
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-[#6f7978] ml-1 text-[20px] select-none">public</span>
+              <input
+                id="landing-repo-input"
+                type="text"
+                value={inputUrl}
+                onChange={(e) => setInputUrl(e.target.value)}
+                placeholder="사이트 URL (실행 중인 앱을 찔러 탐지)"
+                className="flex-grow border-none focus:outline-none focus:ring-0 bg-transparent text-[15px] placeholder-[#bec9c7] text-[#181c1c] font-code px-1 py-1.5"
+              />
+            </div>
+            <div className="h-px bg-[#e0e3e2]"></div>
+            {/* GitHub 레포 — SAST + 실제 코드 수정 */}
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-[#6f7978] ml-1 text-[20px] select-none">folder_code</span>
+              <input
+                id="landing-repo-input-git"
+                type="text"
+                value={inputRepo}
+                onChange={(e) => setInputRepo(e.target.value)}
+                placeholder="GitHub 레포 (선택 — 있으면 검증된 수정/PR 생성)"
+                className="flex-grow border-none focus:outline-none focus:ring-0 bg-transparent text-[15px] placeholder-[#bec9c7] text-[#181c1c] font-code px-1 py-1.5"
+              />
+              <button
+                id="landing-submit-btn"
+                type="submit"
+                className="bg-[#1f6f6b] text-white px-6 py-2.5 rounded-lg font-medium text-[15px] whitespace-nowrap hover:bg-[#005652] active:scale-95 transition-all flex items-center gap-2 shadow-sm cursor-pointer"
+              >
+                <span>연결하기</span>
+                <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+              </button>
+            </div>
           </form>
 
-          <p className="text-[13px] text-[#6f7978] mt-3 font-code">
-            예: https://github.com/내계정/내레포
+          <p className="text-[13px] text-[#6f7978] mt-3">
+            URL만 = <strong>탐지 전용</strong> · 레포까지 = <strong>검증된 수정</strong>까지 · 둘 다 = 완전체(런타임 증거+소스)
           </p>
 
           {/* Quick Demo Repositories */}
