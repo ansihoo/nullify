@@ -60,20 +60,28 @@ async function startServer() {
         return res.json({ reply: fallbackReply });
       }
 
-      const prompt = `당신은 초정밀 웹 보안 취약점 스캐너 'Unknown Security Scanner'의 AI 보안 전문가입니다.
-현재 사용자가 검토 중인 취약점 정보:
-- 유형: ${vulnContext?.type || 'General'}
-- 엔드포인트: ${vulnContext?.endpoint || 'General'}
-- 설명: ${vulnContext?.description || ''}
-- 취약 코드: ${vulnContext?.codeSnippet?.beforeCode || ''}
-- 수정 코드: ${vulnContext?.codeSnippet?.afterCode || ''}
+      // 취약점 컨텍스트는 '참고용'일 뿐 — 질문과 관련 있을 때만 활용한다.
+      // 사용자가 무엇을 묻든 그 질문에 곧바로 답하게 하고, 억지로 취약점 얘기로 끌지 않는다.
+      const ctx = vulnContext
+        ? `참고(사용자가 지금 화면에서 보고 있는 항목 — 질문과 관련될 때만 활용):
+- 유형: ${vulnContext.type || '-'}
+- 엔드포인트: ${vulnContext.endpoint || '-'}
+- 설명: ${vulnContext.description || '-'}${vulnContext.codeSnippet?.beforeCode ? `
+- 관련 코드(취약): ${vulnContext.codeSnippet.beforeCode}` : ''}`
+        : '(현재 선택된 항목 없음)';
+
+      const prompt = `당신은 'Unknown Security Scanner'에 내장된 개발자 도우미입니다.
+보안에 밝지만, 보안 외 일반 질문(코드, 개발, 도구 사용법, 잡담 등)에도 자연스럽게 답합니다.
+
+${ctx}
 
 사용자 질문: "${message}"
 
-요구사항:
-1. 한국어로 친절하고 명확하며 기술적으로 정확하게 답변하세요.
-2. 장황한 군더더기 없이 개발자가 즉시 이해하고 수정할 수 있도록 핵심 원인, 공격 시나리오, 방어 코드 가이드를 제시하세요.
-3. 마크다운 형식을 사용하여 코드 블록이나 핵심 포인트를 보기 쉽게 정리하세요.`;
+답변 규칙:
+1. 한국어로, 사용자의 질문에 '직접' 답하세요. 질문이 위 참고 항목과 무관하면 그 항목은 무시하세요.
+2. 억지로 취약점/공격 얘기로 돌리지 마세요. 보안 질문일 때만 원인·영향·해결을 다루면 됩니다.
+3. 간결하게. 필요할 때만 마크다운(코드블록·목록)을 쓰고, 불필요하게 길게 늘이지 마세요.
+4. 모르면 모른다고 하세요.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-3.6-flash',
