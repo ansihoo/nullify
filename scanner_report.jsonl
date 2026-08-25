@@ -1,0 +1,12 @@
+{"template-id":"sqli-boolean-based","info":{"name":"SQL Injection","severity":"high","tags":["sqli","injection"]},"type":"http","matched-at":"http://127.0.0.1:8009/user?id=1"}
+{"template-id":"sqli-boolean-based","info":{"name":"SQL Injection","severity":"high","tags":["sqli","injection"]},"type":"http","matched-at":"http://127.0.0.1:8009/user_safe?id=1"}
+{"template-id":"reflected-xss","info":{"name":"Reflected Cross-Site Scripting","severity":"medium","tags":["xss"]},"type":"http","matched-at":"http://127.0.0.1:8009/search?q=test"}
+{"template-id":"reflected-xss","info":{"name":"Reflected Cross-Site Scripting","severity":"medium","tags":["xss"]},"type":"http","matched-at":"http://127.0.0.1:8009/search_safe?q=test"}
+{"template-id":"idor-bola","info":{"name":"Broken Object Level Authorization (IDOR)","severity":"high","tags":["idor","bola","access-control"]},"type":"http","matched-at":"http://127.0.0.1:8009/order?id=1001"}
+{"template-id":"path-traversal","info":{"name":"Path Traversal / LFI","severity":"high","tags":["lfi","traversal"]},"type":"http","matched-at":"http://127.0.0.1:8009/download?file=readme.txt"}
+{"template-id":"cmd-injection","info":{"name":"OS Command Injection","severity":"critical","tags":["cmdi","rce","injection"]},"type":"http","matched-at":"http://127.0.0.1:8009/ping?host=x"}
+{"template-id":"open-redirect","info":{"name":"Open Redirect","severity":"medium","tags":["redirect"]},"type":"http","matched-at":"http://127.0.0.1:8009/go?next=/home"}
+{"template-id":"ssrf-detect","info":{"name":"Server-Side Request Forgery","severity":"high","tags":["ssrf"]},"type":"http","matched-at":"http://127.0.0.1:8009/fetch?url=x"}
+{"template-id":"security-headers","info":{"name":"Missing Security Headers","severity":"low","tags":["misconfig","headers"]},"type":"http","matched-at":"http://127.0.0.1:8009/app"}
+{"template-id":"exposed-secret","info":{"name":"Exposed API Key","severity":"high","tags":["secret","exposure"]},"type":"http","matched-at":"http://127.0.0.1:8009/config.js"}
+{"template-id":"outdated-jquery","info":{"name":"Outdated Component (jQuery)","severity":"medium","tags":["component","outdated","cve"]},"type":"http","matched-at":"http://127.0.0.1:8009/assets"}

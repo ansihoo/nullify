@@ -1,0 +1,57 @@
+# Nullify 보안 게이트 — CI 파이프라인 예시 (실제 연결은 레포 소유자가)
+#
+# 설정(레포 Settings):
+#   Secrets:  NULLIFY_ENGINE     (호스팅된 Nullify 엔진 주소, 예: https://nullify.mycompany.com)
+#             NULLIFY_API_TOKEN  (엔진 계정 토큰)
+#   Variables: NULLIFY_TARGET    (검사할 배포 URL, 예: https://staging.myapp.com)
+#
+# 동작:
+#   - PR 열림/갱신 시  → 스테이징을 스캔, 진짜 취약점 있으면 머지 차단(빌드 실패).
+#   - 배포 후(선택)    → rescan 으로 이전 배포 대비 '새로 생긴' 취약점(리그레션) 감지.
+
+name: Nullify Security Gate
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "검사할 대상 URL"
+        required: true
+
+jobs:
+  security-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Nullify 보안 게이트 실행
+        env:
+          NULLIFY_ENGINE: ${{ secrets.NULLIFY_ENGINE }}
+          NULLIFY_API_TOKEN: ${{ secrets.NULLIFY_API_TOKEN }}
+          NULLIFY_TARGET: ${{ github.event.inputs.target || vars.NULLIFY_TARGET }}
+          NULLIFY_MODE: rescan          # 이전 배포 대비 추세 비교
+          NULLIFY_FAIL_ON: critical     # '진짜 터짐'이 있으면 실패
+        run: python nullify_ci.py
+
+  # (선택) 배포 후 재검증 — 배포 job 뒤에 두어 리그레션을 잡는다.
+  # post-deploy-reverify:
+  #   needs: [deploy]
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-python@v5
+  #       with: { python-version: "3.12" }
+  #     - name: 배포 후 재검증
+  #       env:
+  #         NULLIFY_ENGINE: ${{ secrets.NULLIFY_ENGINE }}
+  #         NULLIFY_API_TOKEN: ${{ secrets.NULLIFY_API_TOKEN }}
+  #         NULLIFY_TARGET: ${{ vars.NULLIFY_TARGET }}
+  #         NULLIFY_MODE: rescan
+  #         NULLIFY_FAIL_ON: question    # 배포 후엔 더 엄격하게
+  #       run: python nullify_ci.py
