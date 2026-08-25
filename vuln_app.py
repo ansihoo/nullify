@@ -9,10 +9,7 @@ Nullify 데모용 '일부러 취약한' 타깃 앱.
     socketserver = 요청을 스레드로 동시에 처리하게 해주는 것
 
 엔드포인트 2개로 '취약 vs 안전'을 나란히 둔다 → 검증기가 둘을 구분하는지 본다.
-
-2026-08-25: do_POST 추가. do_GET 의 라우팅을 _dispatch 로 분리해 GET/POST 가
-같은 라우팅을 공유하게 함(로직 변경 없음, 파라미터 출처만 쿼리→바디로 달라짐).
-검증기 POST 확장을 위한 과녁.
+라우팅은 GET/POST 공용(_dispatch) — 검증기가 POST 로 찔러도 같은 로직을 탄다.
 """
 import os
 import html

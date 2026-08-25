@@ -1,5 +1,5 @@
 """
-결정론적 SQL 인젝션 검증기 — 이 파일이 Nullify 의 '심장'이다.
+결정론적 SQL 인젝션 검증기
 
 핵심 원칙: 판정에 LLM 을 쓰지 않는다.
   - LLM 에게 "이거 취약해?" 라고 물으면 환각(없는 걸 있다고, 있는 걸 없다고)이 난다.
@@ -12,9 +12,7 @@
   거짓 조건 : id=1' AND '1'='2     → 주입되면 WHERE 가 항상 거짓 → 결과가 사라짐
   '참과 거짓의 결과가 갈리면' 우리가 넣은 논리식이 SQL 로 해석됐다는 뜻 = 취약.
 
-2026-08-25: fetch/verify 에 method="GET"|"POST" 인자 추가.
-GET 은 기존과 동일(쿼리스트링). POST 는 같은 payload 를 폼 바디로 보낸다.
-판정 로직(불리언 차분)은 요청 방식과 무관하게 동일 — 손 안 댐.
+GET/POST 둘 다 지원 — method 인자로 선택. 판정 로직은 요청 방식과 무관하게 동일.
 """
 import difflib
 import urllib.request
@@ -23,19 +21,9 @@ import urllib.error
 
 
 def fetch(base_url, value, param="id", method="GET"):
-    """
-    (원본)
-    def fetch(base_url, value, param="id"):
-        url = base_url + "?" + urllib.parse.urlencode({param: value})
-        try:
-            with urllib.request.urlopen(url, timeout=5) as r:
-                return r.status, r.read().decode("utf-8", "replace")
-        except urllib.error.HTTPError as e:
-            return e.code, e.read().decode("utf-8", "replace")
-    """
-    # (변경) method="GET"|"POST" 인자 추가. GET 은 기존과 동일(쿼리스트링).
-    #        POST 는 같은 payload 를 폼 바디로 보낸다.
-    #        (positional 인자 순서는 유지 — exploit_sqli.py 하위호환)
+    """base_url 에 payload 를 실어 요청. (상태코드, 본문) 반환.
+       GET: ?param=value 로 쿼리스트링. POST: form-urlencoded 바디.
+       param 을 인자로 받으므로 임의 파라미터명(id/uid/no ...)의 엔드포인트에 붙는다."""
     if method.upper() == "POST":
         data = urllib.parse.urlencode({param: value}).encode("utf-8")
         req = urllib.request.Request(
@@ -60,20 +48,7 @@ def verify(base_url, param="id", T=0.95, method="GET"):
     """
     반환: (verdict, reason, evidence)
       verdict ∈ {CONFIRMED, FALSE_POSITIVE, UNKNOWN}
-    method 로 GET/POST 선택. 판정 로직은 요청 방식과 무관하게 동일.
-
-    (원본)
-    def verify(base_url, param="id", T=0.95):
-        _, baseline   = fetch(base_url, "1", param)
-        _, true_resp  = fetch(base_url, "1' AND '1'='1", param)
-        _, false_resp = fetch(base_url, "1' AND '1'='2", param)
-        evidence = {
-            "baseline (id=1)":            baseline,
-            "true  (id=1' AND '1'='1)":   true_resp,
-            "false (id=1' AND '1'='2)":   false_resp,
-        }
     """
-    # (변경) method 인자 추가 → fetch 로 그대로 전달. 아래 판정 로직은 원본과 동일.
     _, baseline   = fetch(base_url, "1", param, method)
     _, true_resp  = fetch(base_url, "1' AND '1'='1", param, method)
     _, false_resp = fetch(base_url, "1' AND '1'='2", param, method)

@@ -11,7 +11,7 @@ import os
 import json
 import urllib.request
 
-import store
+import infra.store as store
 
 
 def build_alert(target, scan_id, compare):

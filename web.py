@@ -10,10 +10,9 @@ Nullify 웹 스켈레톤 (버릴 수 있는 최소본).
 
 실행:  python web.py   → http://127.0.0.1:8000
 
-2026-08-25: POST 파라미터 검증 지원. 능동 검증기(sqli/xss/cmdi/traversal/redirect/ssrf)의
-scan_* 함수에 method 인자 추가. discover 가 폼에서 발견한 method(GET/POST)를 run_scan 이
-후보에서 읽어 검증기까지 전달. 수동/특수(secret/headers/component/idor)는 method 무시.
-(두 작업자 병합: finding 에 method 기록 + 공격재현도 method 전달 + SCANNERS 는 전 kind 에 method 전달)
+능동 검증기(sqli/xss/cmdi/traversal/redirect/ssrf)는 GET/POST 둘 다 검증한다.
+discover 가 폼에서 발견한 method(GET/POST) 를 run_scan 이 후보에서 읽어 검증기까지 전달.
+수동/특수(secret/headers/component/idor) 는 method 개념이 없어 GET 으로 고정.
 """
 import json
 import inspect
@@ -22,26 +21,26 @@ import http.server
 import urllib.parse
 
 # 엔진은 과녁(vuln_app)을 import 하지 않는다 — 오직 HTTP 로만 대화(진짜 외부 스캐너처럼).
-from verify_sqli import verify as verify_sqli
-from verify_xss import verify as verify_xss
-from verify_idor import cross_account_test, enumerate_test
-from verify_traversal import verify as verify_traversal
-from verify_cmdi import verify as verify_cmdi
-from verify_redirect import verify as verify_redirect
-from verify_ssrf import verify as verify_ssrf
-from verify_headers import verify as verify_headers
-from verify_secret import verify as verify_secret
-from verify_component import verify as verify_component
-from exploit_sqli import find_column_count, union_extract
-from ingest import load_candidates
-from authorize import authorize
-from fixes import FIXES
-import scanner
-import sast
+from verifiers.verify_sqli import verify as verify_sqli
+from verifiers.verify_xss import verify as verify_xss
+from verifiers.verify_idor import cross_account_test, enumerate_test
+from verifiers.verify_traversal import verify as verify_traversal
+from verifiers.verify_cmdi import verify as verify_cmdi
+from verifiers.verify_redirect import verify as verify_redirect
+from verifiers.verify_ssrf import verify as verify_ssrf
+from verifiers.verify_headers import verify as verify_headers
+from verifiers.verify_secret import verify as verify_secret
+from verifiers.verify_component import verify as verify_component
+from verifiers.exploit_sqli import find_column_count, union_extract
+from discovery.ingest import load_candidates
+from infra.authorize import authorize
+from remediation.fixes import FIXES
+import discovery.scanner as scanner
+import discovery.sast as sast
 import combine
-import github_pr
-import store
-import notify
+import remediation.github_pr as github_pr
+import infra.store as store
+import infra.notify as notify
 from collections import deque
 import os
 import sys
@@ -115,7 +114,7 @@ def secrets_from(body):
 
 
 def scan_sqli(base, path, param="id", method="GET"):
-    # (변경) method 인자 추가 → verify_sqli 에 전달. 공격 재현(union_extract 등)도 method 로.
+    # 공격 재현(union_extract, find_column_count)도 method 로 — POST 폼 SQLi 는 POST 로 탈취.
     url = base + path
     v, reason, _ = verify_sqli(url, param, method=method)
     f = {"type": "SQL Injection", "endpoint": path, "verdict": v, "reason": reason, "method": method}
@@ -139,7 +138,6 @@ def scan_sqli(base, path, param="id", method="GET"):
 
 
 def scan_xss(base, path, param="q", method="GET"):
-    # (변경) method 인자 추가 → verify_xss 에 전달(검증·재검증 양쪽).
     url = base + path
     v, reason, ev = verify_xss(url, param, method=method)
     f = {"type": "Reflected XSS", "endpoint": path, "verdict": v, "reason": reason, "method": method}
@@ -159,7 +157,6 @@ def scan_xss(base, path, param="q", method="GET"):
 
 
 def scan_traversal(base, path, param="file", method="GET"):
-    # (변경) method 인자 추가 → verify_traversal 에 전달(검증·재검증 양쪽).
     url = base + path
     v, reason, ev = verify_traversal(url, param, method=method)
     f = {"type": "Path Traversal", "endpoint": path, "verdict": v, "reason": reason, "method": method}
@@ -185,7 +182,6 @@ def _receipt(before_v, after_v):
 
 
 def scan_cmdi(base, path, param="host", method="GET"):
-    # (변경) method 인자 추가 → verify_cmdi 에 전달(검증·재검증 양쪽).
     url = base + path
     v, reason, ev = verify_cmdi(url, param, method=method)
     f = {"type": "Command Injection", "endpoint": path, "verdict": v, "reason": reason, "method": method}
@@ -200,7 +196,6 @@ def scan_cmdi(base, path, param="host", method="GET"):
 
 
 def scan_redirect(base, path, param="next", method="GET"):
-    # (변경) method 인자 추가 → verify_redirect 에 전달(검증·재검증 양쪽).
     url = base + path
     v, reason, ev = verify_redirect(url, param, method=method)
     f = {"type": "Open Redirect", "endpoint": path, "verdict": v, "reason": reason, "method": method}
@@ -215,8 +210,7 @@ def scan_redirect(base, path, param="next", method="GET"):
 
 
 def scan_ssrf(base, path, param="url", method="GET"):
-    # (변경) method 인자 추가 → verify_ssrf 에 전달(검증·재검증 양쪽).
-    #        verify_ssrf 는 internal_url 이 2번째 인자라 method 는 맨 끝에 붙인다.
+    # verify_ssrf 는 internal_url 이 2번째 인자라 method 는 맨 끝에 붙인다.
     url = base + path
     internal = base + "/internal"
     v, reason, ev = verify_ssrf(url, internal, param, method=method)
@@ -334,8 +328,7 @@ def resolve_idor(base, answer, path="/order", param="id"):
 
 
 SCANNERS = {
-    # 능동 검증기: 4번째 인자 m(method) 을 실제로 전달한다(GET/POST 자동 인지).
-    #  ※ 병합 주의: 팀원 버전은 redirect/ssrf 에 method 를 안 넘겨 POST 가 유실됐음 → 여기서 전 kind 전달로 수정.
+    # 능동 검증기: 4번째 인자 m(method) 을 실제로 전달(GET/POST 자동 인지).
     "sqli": lambda b, p, pr, m="GET": scan_sqli(b, p, pr or "id", method=m),
     "xss": lambda b, p, pr, m="GET": scan_xss(b, p, pr or "q", method=m),
     "traversal": lambda b, p, pr, m="GET": scan_traversal(b, p, pr or "file", method=m),
@@ -381,7 +374,7 @@ def run_scan(base, prefer_discover=False):
     for c in candidates:
         fn = SCANNERS.get(c["kind"])
         if fn:
-            # (변경) 후보에 method 가 있으면(폼 발견 시 POST 등) 그걸로, 없으면 GET.
+            # 후보에 method 가 있으면(폼 발견 시 POST 등) 그걸로, 없으면 GET.
             f = fn(base, c["path"], c.get("param", ""), c.get("method", "GET"))
         else:                                  # 검증기 없는 종류는 정직하게 UNKNOWN
             f = {"type": c["kind"], "endpoint": c["path"], "verdict": "UNKNOWN",
