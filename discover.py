@@ -91,7 +91,10 @@ class _LinkParser(HTMLParser):
         elif tag == "script" and a.get("src"):
             self.scripts.append(a["src"])
         elif tag == "form":
-            self._cur_form = [a.get("action", ""), []]
+            """(원본) self._cur_form = [a.get("action", ""), []]"""
+            # (변경) form 의 method 속성도 읽는다(없으면 HTML 기본값 GET).
+            #        [action, [input names], method] 3개 원소로 확장.
+            self._cur_form = [a.get("action", ""), [], (a.get("method", "get") or "get").upper()]
         elif tag in ("input", "textarea", "select") and self._cur_form is not None:
             if a.get("name"):
                 self._cur_form[1].append(a["name"])
@@ -134,20 +137,24 @@ def _same_origin(base, url):
     return (u.scheme, u.netloc) == (b.scheme, b.netloc)
 
 
-def _add_param_candidate(seen, out, path, param, scanner_label):
-    """(path, param, kind) 중복 제거하며 후보 추가."""
+def _add_param_candidate(seen, out, path, param, scanner_label, method="GET"):
+    """(path, param, kind) 중복 제거하며 후보 추가.
+    (변경) method 인자 추가(기본 GET). 폼에서 온 후보는 실제 method(GET/POST)를 담는다.
+           method 는 중복키에 넣지 않는다 — 같은 (kind,path,param)이면 한 번만."""
     for kind in _kinds_for_param(param):
         key = (kind, path, param)
         if key in seen:
             continue
         seen.add(key)
-        out.append({"kind": kind, "path": path, "param": param, "scanner": scanner_label})
+        out.append({"kind": kind, "path": path, "param": param,
+                    "scanner": scanner_label, "method": method})
     # 주문/계정류 경로면 IDOR 도 한 번(경로 기준, 파라미터 무관).
     if any(h in path.lower() for h in IDOR_PATH_HINTS):
         key = ("idor", path, "")
         if key not in seen:
             seen.add(key)
-            out.append({"kind": "idor", "path": path, "param": param, "scanner": scanner_label})
+            out.append({"kind": "idor", "path": path, "param": param,
+                        "scanner": scanner_label, "method": method})
 
 
 def crawl(base, max_pages=25, max_depth=2, timeout=5):
@@ -201,13 +208,14 @@ def crawl(base, max_pages=25, max_depth=2, timeout=5):
                 queue.append((full, depth + 1))
 
         # 폼: action 경로 + 각 input name 을 파라미터 후보로.
-        for action, names in parser.forms:
+        for action, names, fmethod in parser.forms:
             full = urllib.parse.urljoin(norm, action or norm)
             if not _same_origin(base, full):
                 continue
             apath = urllib.parse.urlparse(full).path or "/"
             for name in names:
-                _add_param_candidate(seen_cand, out, apath, name, "discover(form)")
+                _add_param_candidate(seen_cand, out, apath, name,
+                                    "discover(form)", method=fmethod)
 
         # 스크립트: .js 는 시크릿·컴포넌트 검증 후보.
         for src in parser.scripts:

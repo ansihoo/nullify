@@ -9,6 +9,10 @@ Nullify 웹 스켈레톤 (버릴 수 있는 최소본).
   info      = 참고 (안전판)
 
 실행:  python web.py   → http://127.0.0.1:8000
+
+2026-08-25: 능동 검증기(sqli/xss/cmdi/traversal/redirect/ssrf) 의 scan_* 함수에
+method 인자 추가. discover 가 폼에서 발견한 method(GET/POST)를 run_scan 이 후보에서
+읽어 검증기까지 전달한다. 수동/특수(secret/headers/component/idor)는 method 를 받되 무시.
 """
 import json
 import inspect
@@ -109,9 +113,12 @@ def secrets_from(body):
     return [ln.split(",")[0] for ln in body.splitlines() if "-secret" in ln]
 
 
-def scan_sqli(base, path, param="id"):
+def scan_sqli(base, path, param="id", method="GET"):
+    # (변경) method 인자 추가 → verify_sqli 에 전달. GET 이면 기존과 완전 동일.
+    #        공격 재현(union_extract 등)은 GET 기반이라 그대로 둔다 —
+    #        POST 폼이라도 '취약 판정'은 method 로 하고, 데이터 탈취 증명은 GET 로.
     url = base + path
-    v, reason, _ = verify_sqli(url, param)
+    v, reason, _ = verify_sqli(url, param, method=method)
     f = {"type": "SQL Injection", "endpoint": path, "verdict": v, "reason": reason}
     if v != "CONFIRMED":
         f["severity"] = "info"
@@ -121,7 +128,7 @@ def scan_sqli(base, path, param="id"):
     before = secrets_from(body)
     patch = patch_for("sqli")
     control(base, "sqli", "safe")                      # 패치 배포(= CI 재배포 대역)
-    va, _, _ = verify_sqli(url, param)
+    va, _, _ = verify_sqli(url, param, method=method)
     _, body_a = union_extract(url, "secret, name FROM users", param)
     after = secrets_from(body_a)
     control(base, "sqli", "vuln")                      # 데모 반복 위해 원복
@@ -132,16 +139,17 @@ def scan_sqli(base, path, param="id"):
     return f
 
 
-def scan_xss(base, path, param="q"):
+def scan_xss(base, path, param="q", method="GET"):
+    # (변경) method 인자 추가 → verify_xss 에 전달(검증·재검증 양쪽). GET 이면 기존과 동일.
     url = base + path
-    v, reason, ev = verify_xss(url, param)
+    v, reason, ev = verify_xss(url, param, method=method)
     f = {"type": "Reflected XSS", "endpoint": path, "verdict": v, "reason": reason}
     if v != "CONFIRMED":
         f["severity"] = "info"
         return f
     patch = patch_for("xss")
     control(base, "xss", "safe")
-    va, _, _ = verify_xss(url, param)
+    va, _, _ = verify_xss(url, param, method=method)
     control(base, "xss", "vuln")
     f.update(severity="critical", proof_label="반사된 실행형 페이로드",
              proof=[ev.get("reflected_raw", "")], patch=patch,
@@ -151,16 +159,17 @@ def scan_xss(base, path, param="q"):
     return f
 
 
-def scan_traversal(base, path, param="file"):
+def scan_traversal(base, path, param="file", method="GET"):
+    # (변경) method 인자 추가 → verify_traversal 에 전달(검증·재검증 양쪽).
     url = base + path
-    v, reason, ev = verify_traversal(url, param)
+    v, reason, ev = verify_traversal(url, param, method=method)
     f = {"type": "Path Traversal", "endpoint": path, "verdict": v, "reason": reason}
     if v != "CONFIRMED":
         f["severity"] = "info"
         return f
     patch = patch_for("traversal")
     control(base, "traversal", "safe")
-    va, _, _ = verify_traversal(url, param)
+    va, _, _ = verify_traversal(url, param, method=method)
     control(base, "traversal", "vuln")
     f.update(severity="critical", proof_label="유출된 파일 내용",
              proof=[ev.get("response", "")], patch=patch,
@@ -176,44 +185,48 @@ def _receipt(before_v, after_v):
             "fixed": after_v == "FALSE_POSITIVE"}
 
 
-def scan_cmdi(base, path, param="host"):
+def scan_cmdi(base, path, param="host", method="GET"):
+    # (변경) method 인자 추가 → verify_cmdi 에 전달(검증·재검증 양쪽).
     url = base + path
-    v, reason, ev = verify_cmdi(url, param)
+    v, reason, ev = verify_cmdi(url, param, method=method)
     f = {"type": "Command Injection", "endpoint": path, "verdict": v, "reason": reason}
     if v != "CONFIRMED":
         f["severity"] = "info"
         return f
     patch = patch_for("cmdi")
-    control(base, "cmdi", "safe"); va, _, _ = verify_cmdi(url, param); control(base, "cmdi", "vuln")
+    control(base, "cmdi", "safe"); va, _, _ = verify_cmdi(url, param, method=method); control(base, "cmdi", "vuln")
     f.update(severity="critical", proof_label="실행 증거", proof=[ev.get("response", "")],
              patch=patch, receipt=_receipt(v, va))
     return f
 
 
-def scan_redirect(base, path, param="next"):
+def scan_redirect(base, path, param="next", method="GET"):
+    # (변경) method 인자 추가 → verify_redirect 에 전달(검증·재검증 양쪽).
     url = base + path
-    v, reason, ev = verify_redirect(url, param)
+    v, reason, ev = verify_redirect(url, param, method=method)
     f = {"type": "Open Redirect", "endpoint": path, "verdict": v, "reason": reason}
     if v != "CONFIRMED":
         f["severity"] = "info"
         return f
     patch = patch_for("redirect")
-    control(base, "redirect", "safe"); va, _, _ = verify_redirect(url, param); control(base, "redirect", "vuln")
+    control(base, "redirect", "safe"); va, _, _ = verify_redirect(url, param, method=method); control(base, "redirect", "vuln")
     f.update(severity="critical", proof_label="리다이렉트 대상", proof=[ev.get("location", "")],
              patch=patch, receipt=_receipt(v, va))
     return f
 
 
-def scan_ssrf(base, path, param="url"):
+def scan_ssrf(base, path, param="url", method="GET"):
+    # (변경) method 인자 추가 → verify_ssrf 에 전달(검증·재검증 양쪽).
+    #        verify_ssrf 는 internal_url 이 2번째 인자라 method 는 맨 끝에 붙인다.
     url = base + path
     internal = base + "/internal"
-    v, reason, ev = verify_ssrf(url, internal, param)
+    v, reason, ev = verify_ssrf(url, internal, param, method=method)
     f = {"type": "SSRF", "endpoint": path, "verdict": v, "reason": reason}
     if v != "CONFIRMED":
         f["severity"] = "info"
         return f
     patch = patch_for("ssrf")
-    control(base, "ssrf", "safe"); va, _, _ = verify_ssrf(url, internal, param); control(base, "ssrf", "vuln")
+    control(base, "ssrf", "safe"); va, _, _ = verify_ssrf(url, internal, param, method=method); control(base, "ssrf", "vuln")
     f.update(severity="critical", proof_label="유출된 내부 응답", proof=[ev.get("response", "")],
              patch=patch, receipt=_receipt(v, va))
     return f
@@ -322,16 +335,18 @@ def resolve_idor(base, answer, path="/order", param="id"):
 
 
 SCANNERS = {
-    "sqli": lambda b, p, pr: scan_sqli(b, p, pr or "id"),
-    "xss": lambda b, p, pr: scan_xss(b, p, pr or "q"),
-    "traversal": lambda b, p, pr: scan_traversal(b, p, pr or "file"),
-    "cmdi": lambda b, p, pr: scan_cmdi(b, p, pr or "host"),
-    "redirect": lambda b, p, pr: scan_redirect(b, p, pr or "next"),
-    "ssrf": lambda b, p, pr: scan_ssrf(b, p, pr or "url"),
-    "secret": lambda b, p, pr: scan_secret(b, p),
-    "headers": lambda b, p, pr: scan_headers(b, p),
-    "component": lambda b, p, pr: scan_component(b, p),
-    "idor": lambda b, p, pr: scan_idor(b, p or "/order", pr or "id"),
+    # 능동 검증기: 4번째 인자 m(method) 을 실제로 전달한다(GET/POST 자동 인지).
+    "sqli": lambda b, p, pr, m="GET": scan_sqli(b, p, pr or "id", method=m),
+    "xss": lambda b, p, pr, m="GET": scan_xss(b, p, pr or "q", method=m),
+    "traversal": lambda b, p, pr, m="GET": scan_traversal(b, p, pr or "file", method=m),
+    "cmdi": lambda b, p, pr, m="GET": scan_cmdi(b, p, pr or "host", method=m),
+    "redirect": lambda b, p, pr, m="GET": scan_redirect(b, p, pr or "next", method=m),
+    "ssrf": lambda b, p, pr, m="GET": scan_ssrf(b, p, pr or "url", method=m),
+    # 수동/특수: method 개념이 없어 m 을 받되 무시(파라미터 payload 를 안 쓰거나 고정 시나리오).
+    "secret": lambda b, p, pr, m="GET": scan_secret(b, p),
+    "headers": lambda b, p, pr, m="GET": scan_headers(b, p),
+    "component": lambda b, p, pr, m="GET": scan_component(b, p),
+    "idor": lambda b, p, pr, m="GET": scan_idor(b, p or "/order", pr or "id"),
 }
 
 
@@ -366,12 +381,14 @@ def run_scan(base, prefer_discover=False):
     for c in candidates:
         fn = SCANNERS.get(c["kind"])
         if fn:
-            f = fn(base, c["path"], c.get("param", ""))   # 파라미터명은 스캐너 후보에서
+            # (변경) 후보에 method 가 있으면(폼 발견 시 POST 등) 그걸로, 없으면 GET.
+            f = fn(base, c["path"], c.get("param", ""), c.get("method", "GET"))
         else:                                  # 검증기 없는 종류는 정직하게 UNKNOWN
             f = {"type": c["kind"], "endpoint": c["path"], "verdict": "UNKNOWN",
                  "severity": "info", "reason": "이 종류의 검증기가 아직 없음"}
         f["scanner"] = c.get("scanner", "")    # 스캐너의 원래 주장(오탐 대비용)
         f["kind"] = c["kind"]                  # 수정 PR 생성 시 어떤 패치인지
+        f["method"] = c.get("method", "GET")   # 어떤 방식으로 검증했는지 기록(표시용)
         findings.append(f)
     findings.sort(key=lambda x: RANK.get(x["severity"], 9))
     crit = sum(1 for f in findings if f["severity"] == "critical")
@@ -622,6 +639,7 @@ async function showScan(id){
 function cardHtml(f,i){
  const cls=f.severity==='critical'?'t-crit':(f.severity==='question'?'t-q':(f.severity==='warn'?'t-warn':'t-info'));
  let h='<b>'+esc(f.type)+'</b> <code>'+esc(f.endpoint)+'</code> <span class="tag '+cls+'">'+f.verdict+'</span>';
+ if(f.method&&f.method!=='GET') h+=' <span class="tag t-info">'+esc(f.method)+'</span>';
  if(f.scanner) h+='<div style=color:#999;font-size:12px;margin-top:2px>스캐너 주장: '+esc(f.scanner)+(f.verdict==='FALSE_POSITIVE'?' → 우리 검증: 오탐, 걸러냄':'')+'</div>';
  h+='<div style=color:#666;font-size:13px;margin-top:4px>'+esc(f.reason)+'</div>';
  if(f.severity==='critical'||f.severity==='warn'){
