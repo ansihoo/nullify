@@ -86,6 +86,10 @@ export const VerificationView: React.FC<VerificationViewProps> = ({
   // 해결(resolved) vs 미해결로 분리 — 실제 백엔드 status 기준(하드코딩 id 제거).
   const resolvedVulns = vulnerabilities.filter((v) => v.status === 'resolved');
   const unresolvedVulns = vulnerabilities.filter((v) => v.status !== 'resolved' && v.status !== 'ignored');
+  // '증명'은 재검증으로 죽음 확인된 것만 — 닫힌 루프 영수증의 after 가 '재현 안 됨'.
+  // (커밋 생성만으론 증명 아님. ExploitReceipt 엔 afterResponse.vulnerable 로 표현됨)
+  const isProven = (v: Vulnerability) => (v as any).receipt?.afterResponse?.vulnerable === false;
+  const provenVulns = resolvedVulns.filter(isProven);
 
   return (
     <div id="verification-view-container" className="p-6 max-w-7xl mx-auto space-y-6 pb-28">
@@ -158,8 +162,10 @@ export const VerificationView: React.FC<VerificationViewProps> = ({
                 해결된 취약점 ({resolvedVulns.length})
               </h4>
               {resolvedVulns.length > 0 && (
-                <span className="text-xs text-[#005652] font-semibold">
-                  증명 영수증 발급됨
+                <span className="text-xs font-semibold text-[#005652]">
+                  {provenVulns.length > 0
+                    ? `증명 영수증 ${provenVulns.length}건 발급됨`
+                    : '수정 생성됨 · 재검증 대기'}
                 </span>
               )}
             </div>
@@ -184,9 +190,16 @@ export const VerificationView: React.FC<VerificationViewProps> = ({
                       <span className="text-[13px] font-code text-[#005652] bg-[#a6f0ea]/40 px-2 py-0.5 rounded">
                         {vuln.endpoint}
                       </span>
-                      <span className="text-[11px] font-bold text-[#00504d] bg-[#a6f0ea] px-2 py-0.5 rounded">
-                        증명 완료
-                      </span>
+                      {/* 커밋 생성 ≠ 재검증완료: 닫힌 루프 after 가 '재현 안 됨'인 것만 '증명 완료' */}
+                      {isProven(vuln) ? (
+                        <span className="text-[11px] font-bold text-[#00504d] bg-[#a6f0ea] px-2 py-0.5 rounded">
+                          증명 완료
+                        </span>
+                      ) : (
+                        <span className="text-[11px] font-bold text-[#8a5a00] bg-[#f7ecd6] px-2 py-0.5 rounded">
+                          수정됨 · 재검증 대기
+                        </span>
+                      )}
                     </div>
                     <p className="text-[13px] text-[#3f4948]">
                       {vuln.description}
@@ -194,6 +207,7 @@ export const VerificationView: React.FC<VerificationViewProps> = ({
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
+                    {(vuln as any).receipt && (
                     <button
                       id={`btn-open-receipt-${vuln.id}`}
                       onClick={() => onOpenReceipt(vuln)}
@@ -202,6 +216,7 @@ export const VerificationView: React.FC<VerificationViewProps> = ({
                       <span className="material-symbols-outlined text-[15px]">receipt_long</span>
                       <span>영수증(before→after)</span>
                     </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -271,17 +286,19 @@ export const VerificationView: React.FC<VerificationViewProps> = ({
             {(() => {
               // 실제 스캔 결과 기반 리포트(하드코딩 제거).
               const totalV = vulnerabilities.length;
-              const doneV = resolvedVulns.length;
+              const doneV = resolvedVulns.length;            // 수정 생성됨(커밋)
+              const provenV = provenVulns.length;            // 재검증으로 소멸 확인
               const openV = unresolvedVulns.length;
-              const score = totalV > 0 ? Math.round((doneV / totalV) * 100) : 0;
-              const resolvedKinds = Array.from(new Set(resolvedVulns.map((v) => v.type)));
-              const allClear = totalV > 0 && openV === 0;
+              // 점수는 '증명(소멸 확인)' 기준 — 커밋만으론 안 침(정직).
+              const score = totalV > 0 ? Math.round((provenV / totalV) * 100) : 0;
+              const provenKinds = Array.from(new Set(provenVulns.map((v) => v.type)));
+              const allClear = totalV > 0 && provenV === totalV;
               const summary = totalV === 0
                 ? '아직 스캔 결과가 없습니다.'
-                : doneV === 0
-                ? `전체 ${totalV}건 중 재검증으로 소멸이 확인된 항목은 아직 없습니다. 수정을 적용한 뒤 재검증하세요.`
-                : `전체 ${totalV}건 중 ${doneV}건이 재현 실패(소멸 확인)${openV > 0 ? `, ${openV}건 미해결` : ''}. 소멸 확인: ${resolvedKinds.join(', ')}.`;
-              const scoreLabel = allClear ? '안전' : doneV > 0 ? '개선 중' : '조치 필요';
+                : provenV === 0
+                ? `전체 ${totalV}건 중 재검증으로 소멸이 확인된 항목은 아직 없습니다.${doneV > 0 ? ` (수정 생성 ${doneV}건은 재검증 대기)` : ' 수정을 적용한 뒤 재검증하세요.'}`
+                : `전체 ${totalV}건 중 ${provenV}건 소멸 확인(재검증)${doneV > provenV ? `, ${doneV - provenV}건 수정 생성·재검증 대기` : ''}${openV > 0 ? `, ${openV}건 미해결` : ''}. 소멸 확인: ${provenKinds.join(', ')}.`;
+              const scoreLabel = allClear ? '안전' : provenV > 0 ? '개선 중' : '조치 필요';
               return (
               <>
                 <div className="space-y-3 text-[13.5px] text-[#3f4948] leading-relaxed">
@@ -297,7 +314,7 @@ export const VerificationView: React.FC<VerificationViewProps> = ({
                   </div>
                 </div>
                 <div className="pt-2 border-t border-[#eceeed] text-[12px] text-[#6f7978] flex items-center justify-between">
-                  <span>재검증 항목: {doneV}/{totalV}</span>
+                  <span>소멸 확인: {provenV}/{totalV}</span>
                   <span className={`font-code ${allClear ? 'text-[#005652]' : 'text-[#a5680b]'}`}>
                     {allClear ? '전부 소멸 확인' : `미해결 ${openV}건`}
                   </span>
