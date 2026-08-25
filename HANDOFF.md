@@ -8,6 +8,41 @@
 3. 자가진단:  `python selftest.py`  (전부 PASS 여야 정상)
 4. 사용자는 정보보호학과 1학년(한국어). 코드엔 왜 그렇게 짰는지 한 줄 설명, 처음 나오는 도구는 한 문장 짚기, 확신 없으면 없다고 말하기. (전역 CLAUDE.md에 있음)
 
+## 0.5. ⭐ 최신 상태 (2026-08-26) — 새 세션은 여기부터 (아래 원본은 초기 백엔드 맥락)
+프로젝트가 **이름 VibeShield**(구 Nullify)로 바뀌었고, **React 프론트 + LLM 챗 + 자동수정**까지 붙었다.
+
+**실행법 (두 서버):**
+- 백엔드: `cd C:\Users\ansih\nullify && python web.py` → :8000 (과녁 :8009 자동)
+- 프론트: `cd C:\Users\ansih\nullify\unknown-security-scanner && npm run dev` → :3000
+- **LLM 챗**: `unknown-security-scanner/.env` 에 `GEMINI_API_KEY=...` (gitignore됨, 커밋 금지). 없으면 폴백 설명으로 동작.
+- 자가진단: `python selftest.py` (전부 PASS)
+
+**폴더 구조 리팩터됨**: `verifiers/`(검증기10+exploit), `discovery/`(scanner/discover/ingest/sast/scan_source), `remediation/`(fixes/fixgen/github_pr), `infra/`(store/authorize/notify). 루트엔 web.py·vuln_app.py·combine.py·selftest.py 등.
+
+**프론트 (`unknown-security-scanner/`, React+Vite+TS, AI Studio 목업 개조):**
+- 입력: 사이트 URL + GitHub 레포(선택) 동시. **URL만=탐지전용(수정X)** / 레포=SAST / 둘다=완전체(수정O).
+- 흐름: 스캔→분석→수정→검증(상단 스텝퍼). 좌측=스캔 히스토리(localStorage, ChatGPT식, 삭제/복원). 0건이면 전용 '클린' 화면.
+- 어댑터 `src/api/nullify.ts`: 백엔드 findings→Vulnerability. scanEntry/generateFix/resolveIntent/rescanTarget. `_raw/_source/_isRepo/_canFix` 숨김 필드로 백엔드 재호출.
+- 검증뷰: '수정됨(커밋)' vs '증명완료(재검증으로 죽음확인, receipt.afterResponse.vulnerable===false)' 구분. 24h 쿨타임 자동재검증 + 수동 '지금 재검증'.
+- 설정: 자동재검증 on/off, 노이즈필터(strict/all) 실연동. 웹훅은 '준비중'(미연동).
+- LLM 챗(Gemini): 범용 도우미(취약점 강제 안 함). **검증엔 LLM 안 씀 원칙 유지** — 챗/수정생성만.
+
+**자동수정 (remediation/github_pr.py):**
+- `create_fix(repo,kind)`: kind=='headers'→`create_headers_fix`(express=미들웨어 주입 / netlify=_headers / **Vercel=vercel.json**), kind=='secret'→`create_secret_fix`(하드코딩 AKIA 키 소스에서 제거). 그 외 코드계열→카탈로그→**fixgen(Gemini로 전환됨)**→검토.
+- 데모(토이/sample_repo)는 실제 커밋+닫힌루프 완성. 임의 레포는 headers/secret 실동작 + 코드계열은 fixgen(Gemini).
+
+**발표 데모 세팅:** 팀원 제작 외부 취약 타깃 `case-intake-pro-vuln-target.vercel.app`(+레포 `github.com/smartharry1014/case-intake-pro-vuln-target`), allowlist 등록됨. 취약점=**시크릿 노출(크리티컬, lovable-error-reporting.ts:29의 AKIA)** + 헤더누락. 데모 흐름: 스캔(URL+레포)→분석→**시크릿 패치생성(키 제거 커밋)**→cmd `git push`→**Vercel 자동배포(~30-60s)**→재검증→크리티컬 죽음확인.
+- ⚠️ 데모 전 확인: 그 레포 push 권한 + Vercel auto-deploy 연결 여부. 배포 지연 감안. 노출된 실키면 폐기(rotate).
+- 안전판: 토이앱(127.0.0.1:8009)은 "고친 상태로 배포(데모)" 컨트롤로 배포 지연·인증 없이 100% 재현(검증됨: sqli 배포→재검증 crit 7→6, CONFIRMED→FALSE_POSITIVE).
+
+**사업 브리프**: `scratchpad/VibeShield_사업브리프.md` 만들어둠(사업계획서용, 시장·BM·경쟁·리스크). 시장숫자·단가는 대략치라 최신 출처 검증 필요.
+
+**협업**: 공동개발자 `YoonSeongJune02`/`smartharry1014`가 병렬로 계속 push함(삭제메뉴·git복사·fixgen Gemini·데모타깃 등). **매번 `git fetch` 후 병합할 것.** 레포 `ansihoo/nullify`(비공개).
+
+**정직한 한계(계획서·발표용)**: 킬러 데모를 토이 밖에서 완전 증명은 진행중. 실 Nuclei/Semgrep 미설치. git push≠라이브 재배포(재검증 clean은 실제 배포 후에만). 검증 파이프라인이 증명 위해 실데이터 추출→DB/localStorage 저장(호스티드 가면 PII 부담; canary/마스킹 미구현). 제네릭 IDOR 닫힌루프 미완.
+
+---
+
 ## 1. Nullify 가 뭔가
 2026 UNITHON 해커톤 출품작. 주제 **[UNWORK] 일을 지우고 사람을 남기다**.
 컨셉: **보안 스캐너가 쏟아내는 오탐 검수 노동을 없앤다.**
