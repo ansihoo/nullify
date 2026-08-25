@@ -87,6 +87,7 @@
 - ✅ 임의앱 대응(후보 자동발견) — discover.py 완료(2026-08-25). ✅ IDOR 임의경로 일반화(enumerate_test) 완료. ✅ 크롤 깊이 env 튜닝.
 - ✅ **폼 POST 파라미터 실검증 완결(2026-08-25)** — 동료(YoonSeongJune02)가 verify_sqli/xss/cmdi/traversal 에 `method="GET"|"POST"` 추가 + vuln_app do_POST(`_dispatch` 분리). 이어서 배선 완료: discover 가 `<form method=post>` 인식해 후보에 `method` 실어보냄(dedup 키에 method 포함), web.py scan_* 4종·SCANNERS·run_scan 이 method 관통, exploit_sqli(find_column_count/union_extract)도 method 받아 POST 탈취까지. GET 기본값이라 하위호환. selftest 가드: 공격재현 POST·discover 폼 POST 인식.
 - 남은 후속: 제네릭 IDOR 닫힌루프(인증 컨텍스트 주입 방식 설계 필요). redirect/ssrf 는 POST 미지원(검증 원리상 GET 위주라 우선순위 낮음).
+- **임의 레포 자동수정 — 방향 확정(미구현, 2026-08-25)**: 현재 자동수정은 fixes.py 카탈로그가 데모 app.py 에 하드코딩돼 데모 대상에서만 됨. 임의 레포는 create_fix 가 '대상 파일 없음'으로 실패(정직한 안내로 매핑해둠). **채택 방식 = SAST 위치 + LLM 패치**: ①위치는 semgrep(SAST)가 준 file:line(결정론, 환각 방지) ②그 파일 실제 코드를 LLM 이 읽어 패치 생성(임의 레포 일반화). 원칙(검증·위치=결정론, LLM=수정생성만)과 일치. 필요조건: semgrep 설치, fixgen 을 Gemini 로(현재 Anthropic 전용 — 이미 있는 GEMINI 키 재사용 권장), create_fix(repo,kind,file_rel) 의 file_rel 을 SAST finding 에서 배선. 프레임워크별 카탈로그 확장·DAST→소스 자동매핑은 각각 브리틀/불가라 기각.
 - UI 더 다듬기(결과카드·로딩·빈상태), Semgrep/Nuclei 실설치 데모(사용자), OAuth 레포연결(구조만),
   알림 채널 확장, 또는 문서화 전환.
 - 지금까지 "순수 코드로 리스크 없이 배포 근접"은 거의 소진. 남은 큰 건 외부 서비스 실연동(사용자 계정·키 필요).
