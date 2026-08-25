@@ -18,25 +18,26 @@ export const VerificationView: React.FC<VerificationViewProps> = ({
   isAiLoading,
   onRescan,
 }) => {
-  const [countdown, setCountdown] = useState<number>(47);
+  const [progress, setProgress] = useState<number>(0);
   const [chatInput, setChatInput] = useState<string>('');
   const [isRetesting, setIsRetesting] = useState<boolean>(false);
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setCountdown((prev) => (prev > 0 ? prev - 1 : 60));
-    }, 1000);
+      setProgress((prev) => (prev < 100 ? Math.min(prev + 2, 100) : 100));
+    }, 120);
     return () => clearInterval(timer);
   }, []);
 
   const handleInstantRetest = async () => {
     setIsRetesting(true);
+    setProgress(0);
     try {
       // 실제 백엔드 재검증 호출(/api/rescan). 없으면 애니메이션만.
       if (onRescan) await onRescan();
     } finally {
       setIsRetesting(false);
-      setCountdown(59);
+      setProgress(100);
     }
   };
 
@@ -66,41 +67,50 @@ export const VerificationView: React.FC<VerificationViewProps> = ({
       </div>
 
       {/* Top Banner: Live Reproduction Passed */}
-      <div className="bg-[#a6f0ea]/50 border-2 border-[#005652] rounded-2xl p-5 sm:p-6 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      {(() => {
+        const totalV = vulnerabilities.length;
+        const doneV = resolvedVulns.length;
+        const blockRate = totalV > 0 ? Math.round((doneV / totalV) * 100) : 0;
+        const allClear = totalV > 0 && doneV === totalV;
+        return (
+      <div className={`border-2 rounded-2xl p-5 sm:p-6 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${allClear ? 'bg-[#a6f0ea]/50 border-[#005652]' : 'bg-[#fdf2e9] border-[#e08a3c]'}`}>
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-[#005652] text-white flex items-center justify-center shrink-0 shadow-md">
-            <span className="material-symbols-outlined text-[28px]">verified</span>
+          <div className={`w-12 h-12 rounded-xl text-white flex items-center justify-center shrink-0 shadow-md ${allClear ? 'bg-[#005652]' : 'bg-[#e08a3c]'}`}>
+            <span className="material-symbols-outlined text-[28px]">{allClear ? 'verified' : 'sync'}</span>
           </div>
           <div>
             <h3 className="text-[18px] sm:text-[20px] font-bold text-[#00201e] flex items-center gap-2">
-              라이브 재현 → 이제 안 터짐 ✓
+              {allClear
+                ? '라이브 재현 → 이제 안 터짐 ✓'
+                : `재검증 진행 중 — ${doneV}/${totalV} 해결`}
             </h3>
             <p className="text-[13.5px] text-[#00504d] mt-0.5">
-              이전 스캔에서 식별된 주요 위협 패턴이 효과적으로 차단되었습니다.
+              {allClear
+                ? '이전 스캔에서 식별된 주요 위협 패턴이 효과적으로 차단되었습니다.'
+                : `아직 ${totalV - doneV}건이 미해결 상태입니다. 패치 적용 후 재검증하세요.`}
             </p>
           </div>
         </div>
         <div className="text-right shrink-0">
-          <span className="inline-block font-code text-xs font-bold text-[#00504d] bg-white px-3 py-1.5 rounded-lg border border-[#8ad3ce]">
-            Exploit Block Rate: 100%
+          <span className={`inline-block font-code text-xs font-bold bg-white px-3 py-1.5 rounded-lg border ${allClear ? 'text-[#00504d] border-[#8ad3ce]' : 'text-[#b5651d] border-[#e0b48a]'}`}>
+            Exploit Block Rate: {blockRate}%
           </span>
         </div>
       </div>
+        );
+      })()}
 
       {/* Active Rescan Progress Banner */}
       <div className="bg-white border border-[#bec9c7] rounded-2xl p-5 shadow-sm space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-[#005652] animate-spin">
-              sync
-            </span>
             <span className="font-bold text-[16px] text-[#181c1c]">
               남은 취약점 {unresolvedVulns.length}건 — 자동 재스캔이 진행 중입니다
             </span>
           </div>
           <div className="flex items-center gap-3">
             <span className="text-[13px] font-code text-[#6f7978] bg-[#eceeed] px-2.5 py-1 rounded-md">
-              다음 자동 재스캔까지 00:{countdown < 10 ? `0${countdown}` : countdown}
+              재검증 진행률 {Math.round(progress)}%
             </span>
             <button
               id="btn-instant-retest"
@@ -115,10 +125,7 @@ export const VerificationView: React.FC<VerificationViewProps> = ({
 
         {/* Progress Bar */}
         <div className="w-full bg-[#eceeed] h-2 rounded-full overflow-hidden">
-          <div
-            className="bg-[#005652] h-full transition-all duration-1000 ease-linear rounded-full"
-            style={{ width: `${((60 - countdown) / 60) * 100}%` }}
-          ></div>
+          <div className="h-full transition-all duration-200 ease-linear rounded-full" style={{ width: `${progress}%`, backgroundColor: progress < 40 ? '#8ad3ce' : progress < 80 ? '#1f6f6b' : '#005652' }}></div>
         </div>
       </div>
 
