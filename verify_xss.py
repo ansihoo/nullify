@@ -9,6 +9,10 @@
   - 이스케이프되면 → FALSE_POSITIVE (&lt; 등으로 무력화)
   - 반사 안 되면   → FALSE_POSITIVE (여기선 안 터짐)
 고유 마커(random)를 써서 '우연히 페이지에 있던 값'과 헷갈리지 않게 한다.
+
+2026-08-25: fetch/verify 에 method="GET"|"POST" 인자 추가.
+GET 은 기존과 동일(쿼리스트링). POST 는 같은 payload 를 폼 바디로 보낸다.
+판정 로직(반사 여부 확인)은 요청 방식과 무관하게 동일 — 손 안 댐.
 """
 import secrets
 import urllib.request
@@ -16,20 +20,47 @@ import urllib.parse
 import urllib.error
 
 
-def fetch(base_url, param, value):
-    url = base_url + "?" + urllib.parse.urlencode({param: value})
+def fetch(base_url, param, value, method="GET"):
+    """
+    (원본)
+    def fetch(base_url, param, value):
+        url = base_url + "?" + urllib.parse.urlencode({param: value})
+        try:
+            with urllib.request.urlopen(url, timeout=5) as r:
+                return r.status, r.read().decode("utf-8", "replace")
+        except urllib.error.HTTPError as e:
+            return e.code, e.read().decode("utf-8", "replace")
+    """
+    # (변경) method="GET"|"POST" 인자 추가. GET 은 기존과 동일(쿼리스트링).
+    #        POST 는 같은 payload 를 폼 바디로 보낸다. (param, value 순서 유지)
+    if method.upper() == "POST":
+        data = urllib.parse.urlencode({param: value}).encode("utf-8")
+        req = urllib.request.Request(
+            base_url, data=data, method="POST",
+            headers={"Content-Type": "application/x-www-form-urlencoded"})
+    else:
+        url = base_url + "?" + urllib.parse.urlencode({param: value})
+        req = urllib.request.Request(url, method="GET")
     try:
-        with urllib.request.urlopen(url, timeout=5) as r:
+        with urllib.request.urlopen(req, timeout=5) as r:
             return r.status, r.read().decode("utf-8", "replace")
     except urllib.error.HTTPError as e:
         return e.code, e.read().decode("utf-8", "replace")
 
 
-def verify(base_url, param="q"):
+def verify(base_url, param="q", method="GET"):
+    """
+    (원본)
+    def verify(base_url, param="q"):
+        mark = "xq" + secrets.token_hex(3)
+        payload = mark + "<img src=x onerror=alert(1)>" + mark
+        _, body = fetch(base_url, param, payload)
+    """
+    # (변경) method 인자 추가 → fetch 로 그대로 전달. 아래 판정 로직은 원본과 동일.
     mark = "xq" + secrets.token_hex(3)               # 이번 검사에만 쓰는 고유 표식
     payload = mark + "<img src=x onerror=alert(1)>" + mark   # 실행형 프로브
-    _, body = fetch(base_url, param, payload)
-    evidence = {"payload": payload}
+    _, body = fetch(base_url, param, payload, method)
+    evidence = {"method": method, "payload": payload}
 
     if payload in body:                              # 특수문자까지 원문 그대로 반사
         i = body.find(mark)

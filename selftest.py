@@ -24,11 +24,21 @@ B = "http://127.0.0.1:8020"
 
 cases = [
     ("SQLi   취약 /user",        v_sqli(B + "/user")[0],        "CONFIRMED"),
+
+    
+    ("SQLi   취약 /user POST",   v_sqli(B + "/user", method="POST")[0],       "CONFIRMED"),
+    ("SQLi   안전 /user_safe POST", v_sqli(B + "/user_safe", method="POST")[0], "FALSE_POSITIVE"),
+    
+
     ("SQLi   안전 /user_safe",   v_sqli(B + "/user_safe")[0],   "FALSE_POSITIVE"),
     ("XSS    취약 /search",      v_xss(B + "/search")[0],       "CONFIRMED"),
+    ("XSS    취약 /search POST", v_xss(B + "/search", method="POST")[0],      "CONFIRMED"),
+    ("XSS    안전 /search_safe POST", v_xss(B + "/search_safe", method="POST")[0], "FALSE_POSITIVE"),
     ("XSS    안전 /search_safe", v_xss(B + "/search_safe")[0],  "FALSE_POSITIVE"),
     ("LFI    취약 /download",    v_trav(B + "/download")[0],    "CONFIRMED"),
+    ("LFI    취약 /download POST", v_trav(B + "/download", method="POST")[0], "CONFIRMED"),    
     ("CmdI   취약 /ping",        v_cmd(B + "/ping")[0],         "CONFIRMED"),
+    ("CmdI   취약 /ping POST",   v_cmd(B + "/ping", method="POST")[0],        "CONFIRMED"),
     ("Redir  취약 /go",          v_red(B + "/go")[0],           "CONFIRMED"),
     ("SSRF   취약 /fetch",       v_ssrf(B + "/fetch", B + "/internal")[0], "CONFIRMED"),
     ("Header 취약 /app",         v_hdr(B + "/app")[0],          "CONFIRMED"),

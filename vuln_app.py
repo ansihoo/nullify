@@ -9,6 +9,10 @@ Nullify 데모용 '일부러 취약한' 타깃 앱.
     socketserver = 요청을 스레드로 동시에 처리하게 해주는 것
 
 엔드포인트 2개로 '취약 vs 안전'을 나란히 둔다 → 검증기가 둘을 구분하는지 본다.
+
+2026-08-25: do_POST 추가. do_GET 의 라우팅을 _dispatch 로 분리해 GET/POST 가
+같은 라우팅을 공유하게 함(로직 변경 없음, 파라미터 출처만 쿼리→바디로 달라짐).
+검증기 POST 확장을 위한 과녁.
 """
 import os
 import html
@@ -310,9 +314,24 @@ def apply_control(vuln, mode):
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
+        # 파라미터를 쿼리스트링에서 뽑아 공용 라우팅(_dispatch)에 넘긴다.
         parsed = urllib.parse.urlparse(self.path)
         params = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
+        self._dispatch(parsed, params)
 
+    def do_POST(self):
+        # do_GET 과 같은 라우팅을 타되, 파라미터를 쿼리스트링이 아니라
+        # POST 바디(form-urlencoded)에서 뽑는다. 검증기가 POST 로 찔러볼 과녁.
+        parsed = urllib.parse.urlparse(self.path)
+        length = int(self.headers.get("Content-Length", "0") or "0")
+        raw = self.rfile.read(length).decode("utf-8", "replace") if length else ""
+        params = urllib.parse.parse_qs(raw, keep_blank_values=True)
+        # 쿼리스트링이 함께 오면 병합(바디에 없는 키만 보충).
+        for k, v in urllib.parse.parse_qs(parsed.query, keep_blank_values=True).items():
+            params.setdefault(k, v)
+        self._dispatch(parsed, params)
+
+    def _dispatch(self, parsed, params):
         # --- 제어 라우트 (데모/개발 전용): 패치 배포/원복 ---
         if parsed.path == "/control":
             ok = apply_control(params.get("vuln", [""])[0], params.get("mode", ["vuln"])[0])
