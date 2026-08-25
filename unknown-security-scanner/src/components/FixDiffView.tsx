@@ -315,7 +315,7 @@ ${vuln.codeSnippet.afterCode.split('\n').map((l) => `+ ${l}`).join('\n')}
           <h4 className="font-bold text-[16px] text-[#181c1c]">AI 보안 어시스턴트의 제안 메모</h4>
         </div>
         <p className="text-[14px] text-[#3f4948] leading-relaxed">
-          {vuln.aiGuide.bestPracticeTip} 이 패치를 적용하면 Unknown 백엔드가 즉시 라이브 재현 테스트를 구동하여, 이전과 동일한 익스플로잇 페이로드가 정상 차단(403 또는 안전한 응답)되는지 자동으로 확인합니다.
+          {vuln.aiGuide.bestPracticeTip} 이 패치를 적용하면 VibeShield 백엔드가 즉시 라이브 재현 테스트를 구동하여, 이전과 동일한 익스플로잇 페이로드가 정상 차단(403 또는 안전한 응답)되는지 자동으로 확인합니다.
         </p>
       </div>
 

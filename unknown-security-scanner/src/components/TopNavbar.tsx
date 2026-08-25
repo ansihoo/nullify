@@ -33,7 +33,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
             className="text-[24px] leading-[1.3] font-bold text-[#005652] cursor-pointer tracking-tight"
             onClick={onConnectClick}
           >
-            Unknown
+            VibeShield
           </div>
           <div className="hidden md:flex gap-6 items-center">
             <a href="#features" onClick={(e) => { e.preventDefault(); onConnectClick?.(); }} className="text-[#3f4948] font-medium text-[15px] hover:text-[#005652] transition-colors duration-200">
@@ -83,7 +83,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
     <header id="top-navbar-workspace" className="fixed top-0 right-0 left-0 md:left-64 h-16 bg-[#f7faf9] border-b border-[#bec9c7] flex justify-between items-center px-6 z-40">
       <div className="flex items-center gap-5 min-w-0">
         <h2 className="text-[18px] font-bold text-[#005652] tracking-tight flex items-center gap-2 shrink-0">
-          Unknown
+          VibeShield
           {repoUrl && (
             <span className="hidden lg:inline-block font-code text-[12px] font-normal text-[#545f72] bg-[#eceeed] px-2 py-0.5 rounded max-w-[280px] truncate">
               {repoUrl.replace('https://github.com/', '').replace('https://', '')}

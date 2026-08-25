@@ -32,7 +32,7 @@ async function startServer() {
 
   // API Routes
   app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', service: 'Unknown Security Scanner' });
+    res.json({ status: 'ok', service: 'VibeShield Security Scanner' });
   });
 
   // AI Security Assistant Chat Endpoint
@@ -45,7 +45,7 @@ async function startServer() {
         // High quality contextual fallback if GEMINI_API_KEY is not set yet
         const contextType = vulnContext?.type || '보안 취약점';
         const contextEndpoint = vulnContext?.endpoint || '';
-        let fallbackReply = `[Unknown AI 보안 엔진]\n${contextType} (${contextEndpoint}) 관련 문의에 대한 분석 결과입니다:\n\n`;
+        let fallbackReply = `[VibeShield AI 보안 엔진]\n${contextType} (${contextEndpoint}) 관련 문의에 대한 분석 결과입니다:\n\n`;
 
         if (contextType === 'IDOR') {
           fallbackReply += `1. **위협 원인**: 엔드포인트에서 클라이언트가 전달한 객체 식별자(id)를 검증하지 않고 직접 DB를 조회하여 타인의 데이터가 노출됩니다.\n2. **해결 핵심**: \`req.user.id\` 세션/JWT 인증 값을 쿼리 조건에 강제 바인딩해야 합니다.\n3. **자동 검증**: 패치 후 다른 사용자 계정 세션으로 동일 ID 조회를 시도했을 때 403 Forbidden 응답이 반환되는지 확인되었습니다.`;
@@ -70,7 +70,7 @@ async function startServer() {
 - 관련 코드(취약): ${vulnContext.codeSnippet.beforeCode}` : ''}`
         : '(현재 선택된 항목 없음)';
 
-      const prompt = `당신은 'Unknown Security Scanner'에 내장된 개발자 도우미입니다.
+      const prompt = `당신은 'VibeShield Security Scanner'에 내장된 개발자 도우미입니다.
 보안에 밝지만, 보안 외 일반 질문(코드, 개발, 도구 사용법, 잡담 등)에도 자연스럽게 답합니다.
 
 ${ctx}
@@ -108,7 +108,7 @@ ${ctx}
         });
       }
 
-      const prompt = `웹 보안 스캐너 'Unknown'의 분석 엔진으로서 다음 저장소 또는 URL에 대한 보안 진단 요약 및 위험도 평가를 2-3문장으로 간결하게 작성해주세요:
+      const prompt = `웹 보안 스캐너 'VibeShield'의 분석 엔진으로서 다음 저장소 또는 URL에 대한 보안 진단 요약 및 위험도 평가를 2-3문장으로 간결하게 작성해주세요:
 저장소: ${repoUrl}
 초점: 실제 터지는(Exploitable) 취약점만 골라내고 노이즈는 제거함.`;
 
@@ -143,7 +143,7 @@ ${ctx}
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Unknown Security Scanner server running on http://0.0.0.0:${PORT}`);
+    console.log(`VibeShield Security Scanner server running on http://0.0.0.0:${PORT}`);
   });
 }
 

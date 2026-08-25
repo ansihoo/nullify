@@ -124,7 +124,7 @@ export const ScanningView: React.FC<ScanningViewProps> = ({ repoUrl, onScanCompl
       <footer className="bg-[#f7faf9] border-t border-[#e0e3e2]/50 w-full">
         <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-6 flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="text-[20px] font-bold text-[#005652]">
-            Unknown
+            VibeShield
           </div>
           <div className="flex space-x-6">
             <a href="#terms" onClick={(e) => e.preventDefault()} className="text-[14px] text-[#3c475a] hover:text-[#005652] transition-colors">
@@ -138,7 +138,7 @@ export const ScanningView: React.FC<ScanningViewProps> = ({ repoUrl, onScanCompl
             </a>
           </div>
           <div className="text-[14px] text-[#545f72]">
-            © 2024 Unknown Security. All rights reserved.
+            © 2024 VibeShield Security. All rights reserved.
           </div>
         </div>
       </footer>

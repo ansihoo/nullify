@@ -31,7 +31,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onStartScan }) => {
       <main className="flex-grow flex flex-col items-center justify-center px-4 py-16 w-full max-w-7xl mx-auto">
         <div className="text-center mb-10 w-full max-w-3xl animate-fade-in">
           <h1 className="text-[32px] sm:text-[38px] font-bold text-[#1f6f6b] mb-4 tracking-tight">
-            Unknown
+            VibeShield
           </h1>
           <p className="text-[20px] sm:text-[22px] text-[#3f4948] font-normal leading-relaxed">
             지금 당신 앱에서 진짜 터지는 것만 골라, 고치고, 증명합니다.
@@ -112,7 +112,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onStartScan }) => {
       <footer id="landing-footer" className="bg-[#f7faf9] w-full border-t border-[#e0e3e2] mt-auto">
         <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-8 flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="text-[20px] font-bold text-[#005652]">
-            Unknown
+            VibeShield
           </div>
           <div className="flex gap-6 items-center">
             <a href="#terms" onClick={(e) => e.preventDefault()} className="text-[#3c475a] text-[14px] hover:text-[#005652] transition-colors">
@@ -126,7 +126,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onStartScan }) => {
             </a>
           </div>
           <div className="text-[14px] text-[#545f72]">
-            © 2024 Unknown Security. All rights reserved.
+            © 2024 VibeShield Security. All rights reserved.
           </div>
         </div>
       </footer>

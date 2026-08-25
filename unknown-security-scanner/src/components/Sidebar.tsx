@@ -38,7 +38,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     >
       {/* 브랜드 + 신규 스캔 */}
       <div className="px-4 py-4 border-b border-[#e0e3e2]">
-        <div className="text-[20px] font-bold text-[#005652] tracking-tight mb-3">Unknown</div>
+        <div className="text-[20px] font-bold text-[#005652] tracking-tight mb-3">VibeShield</div>
         <button
           id="sidebar-new-scan"
           onClick={onNewScan}

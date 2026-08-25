@@ -240,7 +240,7 @@ export const VerificationView: React.FC<VerificationViewProps> = ({
 
             <div className="space-y-3 text-[13.5px] text-[#3f4948] leading-relaxed">
               <p>
-                <strong>Unknown 보안 검증기:</strong> 백엔드 실시간 DAST 엔진이 패치된 코드베이스에 대하여 동일한 공격 페이로드를 재전송한 결과, IDOR 및 SQLi 엔드포인트의 취약점이 완전히 소멸되었음을 확인하였습니다.
+                <strong>VibeShield 보안 검증기:</strong> 백엔드 실시간 DAST 엔진이 패치된 코드베이스에 대하여 동일한 공격 페이로드를 재전송한 결과, IDOR 및 SQLi 엔드포인트의 취약점이 완전히 소멸되었음을 확인하였습니다.
               </p>
               
               <div className="bg-[#f1f4f3] p-3 rounded-xl border border-[#e0e3e2] space-y-1.5">

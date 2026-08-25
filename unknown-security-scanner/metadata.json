@@ -1,5 +1,5 @@
 {
-  "name": "Unknown Security Scanner",
+  "name": "VibeShield Security Scanner",
   "description": "실제 익스플로잇 가능성을 검증하고 AI 가이드와 자동 패치, 재검증 증명까지 제공하는 차세대 웹 보안 스캐너 워크스페이스",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

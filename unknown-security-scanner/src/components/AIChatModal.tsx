@@ -48,7 +48,7 @@ export const AIChatModal: React.FC<AIChatModalProps> = ({
               <span className="material-symbols-outlined text-[20px]">psychology</span>
             </div>
             <div>
-              <h3 className="font-bold text-[16px] text-[#181c1c]">Unknown AI 보안 어시스턴트</h3>
+              <h3 className="font-bold text-[16px] text-[#181c1c]">VibeShield AI 보안 어시스턴트</h3>
               <p className="text-xs text-[#6f7978]">
                 {selectedVuln ? `문맥: ${selectedVuln.type} (${selectedVuln.endpoint})` : '보안 취약점 Q&A'}
               </p>

@@ -76,7 +76,7 @@ export function App() {
     {
       id: 'msg-1',
       sender: 'ai',
-      text: '안녕하세요! Unknown 보안 어시스턴트입니다. 발견된 취약점의 실제 익스플로잇 가능성이나 코드 패치 방향에 대해 궁금한 점을 질문해 주세요.',
+      text: '안녕하세요! VibeShield 보안 어시스턴트입니다. 발견된 취약점의 실제 익스플로잇 가능성이나 코드 패치 방향에 대해 궁금한 점을 질문해 주세요.',
       timestamp: '방금 전',
     },
   ]);
@@ -303,7 +303,7 @@ export function App() {
       const errorAiMsg: ChatMessage = {
         id: `ai-${Date.now()}`,
         sender: 'ai',
-        text: `[Unknown AI 보안 응답]\n${selectedVuln.type} (${selectedVuln.endpoint}) 취약점의 경우, ${selectedVuln.aiGuide.fixDirection} 원칙을 준수하여 패치를 적용하면 안전하게 보호됩니다.`,
+        text: `[VibeShield AI 보안 응답]\n${selectedVuln.type} (${selectedVuln.endpoint}) 취약점의 경우, ${selectedVuln.aiGuide.fixDirection} 원칙을 준수하여 패치를 적용하면 안전하게 보호됩니다.`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setChatMessages((prev) => [...prev, errorAiMsg]);

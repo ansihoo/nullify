@@ -393,7 +393,7 @@ def run_scan(base, prefer_discover=False):
 
 PAGE = r"""<!doctype html><html lang=ko><head><meta charset=utf-8>
 <meta name=viewport content="width=device-width,initial-scale=1">
-<title>Nullify — 취약점 검증 콘솔</title>
+<title>VibeShield — 취약점 검증 콘솔</title>
 <style>
  :root{--bg:#f4f6f8;--side:#161b26;--ink:#1a1f2b;--muted:#6b7480;--line:#e2e6ec;--acc:#0d7680}
  *{box-sizing:border-box}
@@ -917,7 +917,7 @@ if __name__ == "__main__":
         auth=bool(AUTH_TOKEN), rate_max=RATE_MAX)
     if not AUTH_TOKEN:
         log(level="warn", msg="NULLIFY_API_TOKEN 미설정 — API 가 무방비(개발 모드). 배포 시 반드시 설정.")
-    print("Nullify: http://%s:%d  (Ctrl+C 종료) · /healthz · 인증:%s" % (
+    print("VibeShield: http://%s:%d  (Ctrl+C 종료) · /healthz · 인증:%s" % (
         host, port, "ON" if AUTH_TOKEN else "OFF(개발)"))
     try:
         srv.serve_forever()

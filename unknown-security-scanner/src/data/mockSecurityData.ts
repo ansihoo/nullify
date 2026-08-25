@@ -79,7 +79,7 @@ const order = await Order.findOne({
         status: 403,
         headers: {
           'Content-Type': 'application/json',
-          'X-Protected-By': 'Unknown-Security-Patch',
+          'X-Protected-By': 'VibeShield-Security-Patch',
         },
         body: JSON.stringify(
           {
