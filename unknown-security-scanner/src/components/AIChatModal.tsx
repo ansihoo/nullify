@@ -101,16 +101,19 @@ export const AIChatModal: React.FC<AIChatModalProps> = ({
             type="text"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
-            placeholder="질문을 입력하세요..."
-            className="flex-1 bg-[#f1f4f3] rounded-full px-4 py-2 text-xs sm:text-sm text-[#181c1c] border border-[#bec9c7] focus:outline-none focus:border-[#005652]"
+            disabled={isLoading}
+            placeholder={isLoading ? '이전 질문에 답변하는 중입니다...' : '질문을 입력하세요...'}
+            className="flex-1 bg-[#f1f4f3] rounded-full px-4 py-2 text-xs sm:text-sm text-[#181c1c] border border-[#bec9c7] focus:outline-none focus:border-[#005652] disabled:opacity-60 disabled:cursor-not-allowed"
           />
           <button
             type="submit"
             disabled={isLoading || !inputText.trim()}
             className="bg-[#005652] text-white px-4 py-2 rounded-full text-xs font-bold hover:bg-[#1f6f6b] disabled:opacity-40 transition-all flex items-center gap-1"
           >
-            <span>전송</span>
-            <span className="material-symbols-outlined text-[16px]">send</span>
+            <span>{isLoading ? '답변 대기중' : '전송'}</span>
+            <span className={`material-symbols-outlined text-[16px] ${isLoading ? 'animate-spin' : ''}`}>
+              {isLoading ? 'sync' : 'send'}
+            </span>
           </button>
         </form>
       </div>
