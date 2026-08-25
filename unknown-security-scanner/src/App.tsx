@@ -17,7 +17,7 @@ import {
   INITIAL_SCAN_HISTORY,
 } from './data/mockSecurityData';
 import { Vulnerability, ChatMessage, ScanHistoryRecord } from './types';
-import { scanTarget } from './api/nullify';
+import { scanTarget, resolveIntent, generateFix, rescanTarget } from './api/nullify';
 
 export function App() {
   const [currentTab, setCurrentTab] = useState<'landing' | 'scanning' | 'analysis' | 'fix' | 'verify'>('landing');
@@ -89,53 +89,42 @@ export function App() {
     setIsIntentModalOpen(true);
   };
 
-  const handleConfirmIntent = (vulnId: string, isPrivate: boolean) => {
-    if (isPrivate) {
-      // User confirmed it is strictly private -> Confirmed True Positive Exploit
-      setVulnerabilities((prev) =>
-        prev.map((v) =>
-          v.id === vulnId
-            ? {
-                ...v,
-                requiresIntentConfirmation: false,
-                statusText: '미해결 (확정)',
-                description: '주문한 본인만 열람 가능한 데이터이나 타 사용자의 무단 접근이 입증되었습니다.',
-              }
-            : v
-        )
-      );
-      setIsIntentModalOpen(false);
-      // Auto navigate to fix view for convenience
-      const updatedVuln = vulnerabilities.find((v) => v.id === vulnId);
-      if (updatedVuln) {
-        setSelectedVuln(updatedVuln);
-        setCurrentTab('fix');
+  const handleConfirmIntent = async (vulnId: string, isPrivate: boolean) => {
+    const target = vulnerabilities.find((v) => v.id === vulnId);
+    setIsIntentModalOpen(false);
+    if (!target) return;
+    try {
+      // 백엔드 /api/resolve 실호출 — 판정은 백엔드 결정론이 내린다.
+      const r = await resolveIntent(target, isPrivate);
+      if (r.verdict === 'CONFIRMED') {
+        // owner_only → 진짜 IDOR 확정. 검증된 수정/영수증까지 vuln 에 반영.
+        const updated: Vulnerability = {
+          ...target,
+          requiresIntentConfirmation: false,
+          status: 'unresolved',
+          statusText: '미해결 (확정)',
+          description: r.description,
+          codeSnippet: r.codeSnippet || target.codeSnippet,
+          receipt: r.receipt || target.receipt,
+        };
+        setVulnerabilities((prev) => prev.map((v) => (v.id === vulnId ? updated : v)));
+        setSelectedVuln(updated);
+        setCurrentTab('fix');   // 편의상 바로 수정 화면으로
+      } else {
+        // public → 공개 데이터로 확인 → 오탐 처리, 노이즈로 이동.
+        setVulnerabilities((prev) =>
+          prev.map((v) => (v.id === vulnId
+            ? { ...v, status: 'ignored', statusText: '공개 정책 확인됨', requiresIntentConfirmation: false }
+            : v)));
+        setFilteredNoise((prev) => [
+          { id: `noise-${Date.now()}`, type: target.type, endpoint: target.endpoint,
+            reason: r.description || '사용자 확인: 공개 리소스로 판명되어 목록에서 제외.',
+            category: 'false_positive' },
+          ...prev,
+        ]);
       }
-    } else {
-      // User said anyone can view it -> Mark as ignored / false positive
-      setVulnerabilities((prev) =>
-        prev.map((v) =>
-          v.id === vulnId
-            ? {
-                ...v,
-                status: 'ignored',
-                statusText: '공개 정책 확인됨',
-                requiresIntentConfirmation: false,
-              }
-            : v
-        )
-      );
-      setFilteredNoise((prev) => [
-        {
-          id: `noise-${Date.now()}`,
-          type: 'Public Data Endpoint',
-          endpoint: intentTargetVuln?.endpoint || '/orders/1024',
-          reason: '사용자 의도 확인 완료: 누구나 접근 가능한 공개 리소스로 판명되어 목록에서 제외됨',
-          category: 'false_positive',
-        },
-        ...prev,
-      ]);
-      setIsIntentModalOpen(false);
+    } catch (e: any) {
+      setScanError(`의도 확인 처리 실패: ${e?.message || e}`);
     }
   };
 
@@ -144,18 +133,37 @@ export function App() {
     setCurrentTab('fix');
   };
 
-  const handleGeneratePatch = (vuln: Vulnerability) => {
-    setVulnerabilities((prev) =>
-      prev.map((v) =>
-        v.id === vuln.id
-          ? {
-              ...v,
-              status: 'resolved',
-              statusText: '수정 완료',
-            }
-          : v
-      )
-    );
+  const handleGeneratePatch = async (vuln: Vulnerability) => {
+    // 백엔드 /api/pr 실호출 — 실제 git 브랜치·커밋 생성(push/PR 만 사용자 몫).
+    try {
+      const fix = await generateFix(vuln);
+      const prInfo = fix.ok
+        ? { branch: fix.branch, commit: fix.commit, title: fix.title, gh: fix.gh, fixSource: fix.fixSource }
+        : { error: fix.error, needsReview: fix.needsReview, reason: fix.reason };
+      setVulnerabilities((prev) =>
+        prev.map((v) =>
+          v.id === vuln.id
+            ? { ...v, status: fix.ok ? 'resolved' : v.status,
+                statusText: fix.ok ? '수정 완료 (git 커밋 생성됨)' : v.statusText,
+                ...(({ _pr: prInfo } as any)) }
+            : v));
+      setSelectedVuln((cur) => (cur.id === vuln.id
+        ? { ...cur, status: fix.ok ? 'resolved' : cur.status, ...(({ _pr: prInfo } as any)) }
+        : cur));
+    } catch (e: any) {
+      setScanError(`수정 생성 실패: ${e?.message || e}`);
+    }
+  };
+
+  // 재검증: 백엔드가 패치 후 같은 공격을 다시 돌려 이전 스캔과 비교.
+  const handleRescan = async () => {
+    try {
+      const { vulnerabilities: vulns, filteredNoise: noise } = await rescanTarget(repoUrl);
+      setVulnerabilities(vulns);
+      setFilteredNoise(noise);
+    } catch (e: any) {
+      setScanError(`재검증 실패: ${e?.message || e}`);
+    }
   };
 
   const handleNavigateToVerify = () => {
@@ -306,6 +314,7 @@ export function App() {
               onNavigateToAnalysis={handleNavigateToFix}
               onAskAI={handleAskAI}
               isAiLoading={isAiLoading}
+              onRescan={handleRescan}
             />
           )}
         </main>

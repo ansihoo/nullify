@@ -7,6 +7,7 @@ interface VerificationViewProps {
   onNavigateToAnalysis: (vuln: Vulnerability) => void;
   onAskAI: (question: string) => void;
   isAiLoading?: boolean;
+  onRescan?: () => Promise<void> | void;
 }
 
 export const VerificationView: React.FC<VerificationViewProps> = ({
@@ -15,6 +16,7 @@ export const VerificationView: React.FC<VerificationViewProps> = ({
   onNavigateToAnalysis,
   onAskAI,
   isAiLoading,
+  onRescan,
 }) => {
   const [countdown, setCountdown] = useState<number>(47);
   const [chatInput, setChatInput] = useState<string>('');
@@ -27,12 +29,15 @@ export const VerificationView: React.FC<VerificationViewProps> = ({
     return () => clearInterval(timer);
   }, []);
 
-  const handleInstantRetest = () => {
+  const handleInstantRetest = async () => {
     setIsRetesting(true);
-    setTimeout(() => {
+    try {
+      // 실제 백엔드 재검증 호출(/api/rescan). 없으면 애니메이션만.
+      if (onRescan) await onRescan();
+    } finally {
       setIsRetesting(false);
       setCountdown(59);
-    }, 1500);
+    }
   };
 
   const handleChatSubmit = (e: React.FormEvent) => {
@@ -43,9 +48,9 @@ export const VerificationView: React.FC<VerificationViewProps> = ({
     }
   };
 
-  // Divide resolved vs unresolved
-  const resolvedVulns = vulnerabilities.filter((v) => v.id === 'vuln-1' || v.id === 'vuln-2' || v.status === 'resolved');
-  const unresolvedVulns = vulnerabilities.filter((v) => v.id === 'vuln-3' || (v.status !== 'resolved' && v.id !== 'vuln-1' && v.id !== 'vuln-2'));
+  // 해결(resolved) vs 미해결로 분리 — 실제 백엔드 status 기준(하드코딩 id 제거).
+  const resolvedVulns = vulnerabilities.filter((v) => v.status === 'resolved');
+  const unresolvedVulns = vulnerabilities.filter((v) => v.status !== 'resolved' && v.status !== 'ignored');
 
   return (
     <div id="verification-view-container" className="p-6 max-w-7xl mx-auto space-y-6 pb-28">

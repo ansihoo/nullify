@@ -30,6 +30,7 @@ interface Finding {
   type: string;
   kind: string;
   endpoint: string;
+  param?: string;                // idor 등 resolve 시 백엔드에 넘길 파라미터명
   verdict: string;               // CONFIRMED | FALSE_POSITIVE | UNKNOWN
   severity: string;              // critical | warn | question | info
   reason: string;
@@ -268,4 +269,98 @@ export async function scanTarget(target: string): Promise<{
     .filter((f) => f.severity === 'info')
     .map(toNoise);
   return { vulnerabilities, filteredNoise, raw: data };
+}
+
+function authHeaders(): Record<string, string> {
+  return API_TOKEN ? { 'X-API-Token': API_TOKEN } : {};
+}
+
+/**
+ * IDOR '의도 확인' 답을 백엔드에 보낸다(/api/resolve).
+ *   isPrivate=true  → owner_only → 백엔드가 CONFIRMED 승격(+ 토이앱은 닫힌 루프까지)
+ *   isPrivate=false → public     → FALSE_POSITIVE(오탐, 목록에서 내림)
+ * 반환은 화면 갱신에 바로 쓰도록 어댑팅된 부분 Vulnerability.
+ */
+export async function resolveIntent(v: Vulnerability, isPrivate: boolean): Promise<{
+  verdict: string;
+  description: string;
+  codeSnippet?: CodeSnippet;
+  receipt?: ExploitReceipt;
+}> {
+  const raw = (v as any)._raw as Finding;
+  const target = (v as any)._target as string;
+  const answer = isPrivate ? 'owner_only' : 'public';
+  const path = raw?.endpoint || '/order';
+  const param = raw?.param || 'id';
+  const url = `${API_BASE}/api/resolve?target=${encodeURIComponent(target)}`
+            + `&answer=${answer}&path=${encodeURIComponent(path)}&param=${encodeURIComponent(param)}`;
+  const res = await fetch(url, { headers: authHeaders() });
+  if (!res.ok) throw new Error(`resolve 실패 ${res.status}`);
+  const d = await res.json();
+  // d: {verdict, severity, endpoint, reason, patch?, receipt?, proof?}
+  const asFinding: Finding = {
+    ...raw, verdict: d.verdict, severity: d.severity, reason: d.reason,
+    patch: d.patch, receipt: d.receipt, proof: d.proof,
+  };
+  return {
+    verdict: d.verdict,
+    description: d.reason || v.description,
+    codeSnippet: d.patch ? parsePatch(raw.kind, d.patch) : undefined,
+    receipt: toReceipt(asFinding),
+  };
+}
+
+export interface FixResult {
+  ok: boolean;
+  branch?: string;
+  commit?: string;
+  title?: string;
+  diff?: string;
+  gh?: string;
+  fixSource?: string;       // catalog | llm
+  needsReview?: boolean;
+  reason?: string;
+  error?: string;
+}
+
+/**
+ * 실제 git 브랜치·커밋으로 수정 생성(/api/pr). push/PR 만 사용자 인증 몫.
+ * 백엔드: 카탈로그 규칙 → 없으면 LLM(fixgen, 키 있을 때) → 없으면 needs_review.
+ */
+export async function generateFix(v: Vulnerability): Promise<FixResult> {
+  const raw = (v as any)._raw as Finding;
+  const url = `${API_BASE}/api/pr?kind=${encodeURIComponent(raw?.kind || '')}`;
+  const res = await fetch(url, { headers: authHeaders() });
+  if (!res.ok) return { ok: false, error: `PR 생성 실패 ${res.status}` };
+  const d = await res.json();
+  if (d.error) return { ok: false, error: d.error };
+  if (d.needs_review) return { ok: false, needsReview: true, reason: d.reason };
+  return {
+    ok: true, branch: d.branch, commit: d.commit, title: d.title,
+    diff: d.diff, gh: d.gh, fixSource: d.fix_source,
+  };
+}
+
+/**
+ * 재검증(/api/rescan): 패치 배포 후 같은 공격을 다시 돌려 이전 스캔과 비교.
+ * 반환에 compare(fixed/new/unchanged) 포함.
+ */
+export async function rescanTarget(target: string): Promise<{
+  vulnerabilities: Vulnerability[];
+  filteredNoise: FilteredNoiseItem[];
+  compare?: { fixed: string[]; new: string[]; unchanged: string[] };
+  raw: any;
+}> {
+  const url = `${API_BASE}/api/rescan?target=${encodeURIComponent(target)}&discover=1`;
+  const res = await fetch(url, { headers: authHeaders() });
+  if (!res.ok) throw new Error(`재검증 실패 ${res.status}`);
+  const data = await res.json();
+  if (data.authorized === false) throw new Error(`권한 거부 — ${data.reason || ''}`);
+  const findings: Finding[] = data.findings || [];
+  return {
+    vulnerabilities: findings.filter((f) => f.severity !== 'info').map((f, i) => adapt(f, i, target)),
+    filteredNoise: findings.filter((f) => f.severity === 'info').map(toNoise),
+    compare: data.compare,
+    raw: data,
+  };
 }

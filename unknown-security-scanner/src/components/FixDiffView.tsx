@@ -219,6 +219,48 @@ ${vuln.codeSnippet.afterCode.split('\n').map((l) => `+ ${l}`).join('\n')}
         </div>
       </div>
 
+      {/* 실제 git 수정 결과 (백엔드 /api/pr) */}
+      {(() => {
+        const pr = (vuln as any)._pr;
+        if (!pr) return null;
+        if (pr.error || pr.needsReview) {
+          return (
+            <div className="bg-[#fef6e7] rounded-2xl border border-[#f0d9a8] p-6 space-y-2">
+              <h4 className="font-bold text-[15px] text-[#8a5a00] flex items-center gap-2">
+                <span className="material-symbols-outlined text-[18px]">info</span>
+                {pr.needsReview ? '전문가 검토 필요' : '수정 생성 실패'}
+              </h4>
+              <p className="text-[13.5px] text-[#6b5416]">
+                {pr.reason || pr.error}
+                {pr.needsReview && ' — 임의 코드 수정은 ANTHROPIC_API_KEY 설정 시 LLM 이 도출합니다.'}
+              </p>
+            </div>
+          );
+        }
+        return (
+          <div className="bg-[#e9f7f5] rounded-2xl border border-[#a6f0ea] p-6 space-y-3">
+            <h4 className="font-bold text-[16px] text-[#00504d] flex items-center gap-2">
+              <span className="material-symbols-outlined text-[18px]">commit</span>
+              실제 git 커밋 생성됨
+              <span className="text-[11px] font-bold bg-[#005652] text-white px-2 py-0.5 rounded">
+                수정 출처: {pr.fixSource === 'catalog' ? '결정론 규칙' : pr.fixSource === 'llm' ? 'LLM 생성' : pr.fixSource}
+              </span>
+            </h4>
+            <div className="text-[13px] font-code text-[#00403d] space-y-1">
+              <div>브랜치: <span className="bg-white px-2 py-0.5 rounded border border-[#a6f0ea]">{pr.branch}</span></div>
+              <div>커밋: <span className="bg-white px-2 py-0.5 rounded border border-[#a6f0ea]">{pr.commit}</span> · {pr.title}</div>
+            </div>
+            <div className="rounded-lg overflow-hidden border border-[#005652]/30 bg-[#181c1c]">
+              <div className="px-4 py-1.5 text-[11px] font-code text-[#a5efe9] border-b border-[#2d3e3c]">
+                실행 (당신 GitHub 인증으로) — push/PR 만 사용자 몫
+              </div>
+              <pre className="p-3 text-[12px] font-code text-[#a5efe9] overflow-x-auto whitespace-pre-wrap">{pr.gh}</pre>
+            </div>
+            <p className="text-[12px] text-[#3f6f6b]">※ 브랜치·커밋은 로컬 레포에 실제 생성됩니다. 원격 push 와 PR 은 당신 인증으로만 진행됩니다.</p>
+          </div>
+        );
+      })()}
+
       {/* AI Remediation Guide Summary Card */}
       <div className="bg-[#f1f4f3] rounded-2xl border border-[#e0e3e2] p-6 space-y-3">
         <div className="flex items-center gap-2">
