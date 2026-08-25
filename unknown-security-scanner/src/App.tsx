@@ -3,6 +3,7 @@ import { TopNavbar } from './components/TopNavbar';
 import { Sidebar } from './components/Sidebar';
 import { LandingView } from './components/LandingView';
 import { ScanningView } from './components/ScanningView';
+import { CleanResultView } from './components/CleanResultView';
 import { AnalysisView } from './components/AnalysisView';
 import { FixDiffView } from './components/FixDiffView';
 import { VerificationView } from './components/VerificationView';
@@ -59,7 +60,7 @@ function persistSettings(s: AppSettings) {
 }
 
 export function App() {
-  const [currentTab, setCurrentTab] = useState<'landing' | 'scanning' | 'analysis' | 'fix' | 'verify'>('landing');
+  const [currentTab, setCurrentTab] = useState<'landing' | 'scanning' | 'analysis' | 'fix' | 'verify' | 'clear'>('landing');
   // 백엔드는 로컬 전용(127.0.0.1) + 공개 URL 거부이므로 기본 대상은 데모 과녁 앱.
   const [repoUrl, setRepoUrl] = useState<string>('http://127.0.0.1:8009');
   const [scanError, setScanError] = useState<string | null>(null);
@@ -69,6 +70,7 @@ export function App() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);   // 워크스페이스 설정
   const scanningRef = useRef<boolean>(false);   // 실제 스캔 진행중? (애니메이션과 경합 방지)
+  const resultTabRef = useRef<'analysis' | 'clear'>('analysis');   // 스캔 후 이동할 화면(0건→clear)
 
   useEffect(() => { setSessions(loadSessions()); setSettings(loadSettings()); }, []);   // 최초 로드 복원
   const [vulnerabilities, setVulnerabilities] = useState<Vulnerability[]>(INITIAL_VULNERABILITIES);
@@ -140,20 +142,23 @@ export function App() {
       };
       setSessions((prev) => { const next = [session, ...prev].slice(0, 50); persistSessions(next); return next; });
       setActiveSessionId(session.id);
+      // 0건이면 분석 대신 전용 '클린' 화면으로.
+      resultTabRef.current = vulns.length ? 'analysis' : 'clear';
     } catch (e: any) {
       setScanError(e?.message || String(e));
       setVulnerabilities([]);
       setFilteredNoise([]);
+      resultTabRef.current = 'analysis';   // 에러는 분석 화면에서 배너로.
     } finally {
       scanningRef.current = false;
-      setCurrentTab('analysis');   // 스캔이 끝나면(성공/실패) 결과 화면으로.
+      setCurrentTab(resultTabRef.current);   // 결과에 따라 이동(0건→clear).
     }
   };
 
   // ScanningView 애니메이션(약 4.2초)이 먼저 끝난 경우: 스캔이 아직 진행중이면
   // 넘기지 않고, 위 handleStartScan 의 finally 가 넘기도록 둔다(경합 방지).
   const handleScanComplete = () => {
-    if (!scanningRef.current) setCurrentTab('analysis');
+    if (!scanningRef.current) setCurrentTab(resultTabRef.current);
   };
 
   // 히스토리 항목 클릭 → 그때 분석하던 결과를 그대로 복원(재스캔 없음).
@@ -167,8 +172,16 @@ export function App() {
     setRepoUrl(s.label);
     setActiveSessionId(id);
     setScanError(null);
-    setScanNotice(null);
-    setCurrentTab('analysis');
+    // 0건 세션은 전용 클린 화면으로 복원.
+    if (s.vulnerabilities.length === 0) {
+      setScanNotice(s.mode === 'source'
+        ? '정적 탐지 0건 — 하드코딩 시크릿 없음. 런타임 항목(보안 헤더 등)은 사이트 URL도 함께 넣어야 검사됩니다.'
+        : '이 대상에서 재현되는 취약점을 찾지 못했습니다.');
+      setCurrentTab('clear');
+    } else {
+      setScanNotice(null);
+      setCurrentTab('analysis');
+    }
   };
 
   // 새 스캔 = 새 대화 시작(입력 화면으로).
@@ -364,8 +377,8 @@ export function App() {
         </div>
       )}
 
-      {/* 정보성 안내(0건 등) */}
-      {scanNotice && !scanError && (
+      {/* 정보성 안내(0건 등) — clear 화면은 자체에 안내가 있어 배너 생략 */}
+      {scanNotice && !scanError && currentTab !== 'clear' && (
         <div className="bg-[#e7f1fd] border-b border-[#bcd8f5] text-[#1a4d80] px-4 py-2 text-[13px] text-center">
           {scanNotice}
         </div>
@@ -396,6 +409,15 @@ export function App() {
             <ScanningView
               repoUrl={repoUrl}
               onScanComplete={handleScanComplete}
+            />
+          )}
+
+          {currentTab === 'clear' && (
+            <CleanResultView
+              target={repoUrl}
+              notice={scanNotice}
+              noiseCount={filteredNoise.length}
+              onNewScan={handleNewScan}
             />
           )}
 
