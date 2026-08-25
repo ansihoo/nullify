@@ -8,6 +8,7 @@ interface VerificationViewProps {
   onAskAI: (question: string) => void;
   isAiLoading?: boolean;
   onRescan?: () => Promise<void> | void;
+  autoRescanEnabled?: boolean;   // 설정: 쿨타임 후 자동 재검증 on/off
 }
 
 export const VerificationView: React.FC<VerificationViewProps> = ({
@@ -17,6 +18,7 @@ export const VerificationView: React.FC<VerificationViewProps> = ({
   onAskAI,
   isAiLoading,
   onRescan,
+  autoRescanEnabled = true,
 }) => {
   const [progress, setProgress] = useState<number>(0);
   // ── 재스캔 쿨타임: 하루(24h)에 한 번. 마지막 스캔 시각을 localStorage 에 저장 ──
@@ -69,11 +71,11 @@ export const VerificationView: React.FC<VerificationViewProps> = ({
   // 쿨타임이 끝나면(이미 한 번 스캔한 적 있으면) 자동으로 재검증 실행.
   // 모든 상태(isRetesting)·함수(runRescan) 선언 이후라 참조 안전.
   useEffect(() => {
-    if (lastScan !== 0 && cooldownLeft === 0 && !isRetesting) {
+    if (autoRescanEnabled && lastScan !== 0 && cooldownLeft === 0 && !isRetesting) {
       runRescan();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cooldownLeft, lastScan, isRetesting]);
+  }, [cooldownLeft, lastScan, isRetesting, autoRescanEnabled]);
 
   const handleChatSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -135,12 +137,23 @@ export const VerificationView: React.FC<VerificationViewProps> = ({
           </span>
           <div className="flex items-center gap-2">
             <span className="text-[12px] font-code text-[#6f7978] bg-[#eceeed] px-2.5 py-1 rounded-md">
-              {isRetesting
+              {!autoRescanEnabled
+                ? '자동 재검증 꺼짐 (설정)'
+                : isRetesting
                 ? '자동 재검증 실행 중...'
                 : lastScan === 0
                 ? '첫 재검증 대기 중'
                 : `다음 자동 재검증까지 ${fmtCooldown(cooldownLeft)}`}
             </span>
+            {/* 수동 재검증 — 자동 on/off·쿨타임과 무관하게 항상 즉시 실행 가능 */}
+            <button
+              id="btn-instant-retest"
+              onClick={runRescan}
+              disabled={isRetesting}
+              className="text-[12px] font-bold text-white bg-[#005652] hover:bg-[#1f6f6b] px-3 py-1 rounded-md transition-all active:scale-95 disabled:opacity-50"
+            >
+              {isRetesting ? '재검증 중...' : '지금 재검증'}
+            </button>
           </div>
         </div>
       </div>

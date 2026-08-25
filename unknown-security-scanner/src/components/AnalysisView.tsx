@@ -11,6 +11,7 @@ interface AnalysisViewProps {
   onAskAI: (question: string) => void;
   isAiLoading?: boolean;
   canFix?: boolean;   // 소스 레포 있음 → '수정' 제공 가능
+  noiseFilter?: 'strict' | 'all';   // strict=오탐 숨김 / all=걸러낸 오탐도 표시
 }
 
 export const AnalysisView: React.FC<AnalysisViewProps> = ({
@@ -23,6 +24,7 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
   onAskAI,
   isAiLoading,
   canFix = false,
+  noiseFilter = 'strict',
 }) => {
   const [isNoiseExpanded, setIsNoiseExpanded] = useState<boolean>(false);
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
@@ -206,7 +208,8 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
             })}
         </div>
 
-        {/* Collapsible Filtered Noise Section (192 건) */}
+        {/* 걸러낸 오탐/노이즈 — 설정이 '전체(all)'일 때만 노출 */}
+        {noiseFilter === 'all' && (
         <div className="bg-white rounded-xl border border-[#bec9c7] overflow-hidden">
           <button
             id="toggle-noise-accordion-btn"
@@ -260,6 +263,7 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
             </div>
           )}
         </div>
+        )}
 
       </div>
 

@@ -43,6 +43,21 @@ function labelOf(url: string, repo: string): string {
     || '로컬 데모 과녁';
 }
 
+// ── 워크스페이스 설정 (localStorage 영속) ──
+const SETTINGS_KEY = 'vibeshield_settings';
+export interface AppSettings {
+  autoRetest: boolean;                 // 쿨타임 후 자동 재검증 on/off
+  noiseFilter: 'strict' | 'all';       // strict=실제 터지는 것만 / all=걸러낸 오탐도 표시
+}
+const DEFAULT_SETTINGS: AppSettings = { autoRetest: true, noiseFilter: 'strict' };
+function loadSettings(): AppSettings {
+  try { return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') }; }
+  catch { return DEFAULT_SETTINGS; }
+}
+function persistSettings(s: AppSettings) {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch { /* 무시 */ }
+}
+
 export function App() {
   const [currentTab, setCurrentTab] = useState<'landing' | 'scanning' | 'analysis' | 'fix' | 'verify'>('landing');
   // 백엔드는 로컬 전용(127.0.0.1) + 공개 URL 거부이므로 기본 대상은 데모 과녁 앱.
@@ -52,9 +67,10 @@ export function App() {
   const [canFix, setCanFix] = useState<boolean>(false);   // 소스 레포가 있어 '수정' 제공 가능?
   const [sessions, setSessions] = useState<ScanSession[]>([]);       // 스캔 대화 히스토리
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);   // 워크스페이스 설정
   const scanningRef = useRef<boolean>(false);   // 실제 스캔 진행중? (애니메이션과 경합 방지)
 
-  useEffect(() => { setSessions(loadSessions()); }, []);   // 최초 로드 시 히스토리 복원
+  useEffect(() => { setSessions(loadSessions()); setSettings(loadSettings()); }, []);   // 최초 로드 복원
   const [vulnerabilities, setVulnerabilities] = useState<Vulnerability[]>(INITIAL_VULNERABILITIES);
   const [selectedVuln, setSelectedVuln] = useState<Vulnerability>(INITIAL_VULNERABILITIES[0]);
   const [filteredNoise, setFilteredNoise] = useState(SAMPLE_FILTERED_NOISE);
@@ -394,6 +410,7 @@ export function App() {
               onAskAI={handleAskAI}
               isAiLoading={isAiLoading}
               canFix={canFix}
+              noiseFilter={settings.noiseFilter}
             />
           )}
 
@@ -416,6 +433,7 @@ export function App() {
               onAskAI={handleAskAI}
               isAiLoading={isAiLoading}
               onRescan={handleRescan}
+              autoRescanEnabled={settings.autoRetest}
             />
           )}
         </main>
@@ -452,6 +470,8 @@ export function App() {
         <SettingsModal
           isOpen={isSettingsModalOpen}
           onClose={() => setIsSettingsModalOpen(false)}
+          settings={settings}
+          onSave={(next) => { setSettings(next); persistSettings(next); }}
         />
       )}
 
