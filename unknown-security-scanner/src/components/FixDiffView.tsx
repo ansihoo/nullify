@@ -335,8 +335,13 @@ ${vuln.codeSnippet.afterCode.split('\n').map((l) => `+ ${l}`).join('\n')}
               <div>커밋: <span className="bg-white px-2 py-0.5 rounded border border-[#a6f0ea]">{pr.commit}</span> · {pr.title}</div>
             </div>
             <div className="rounded-lg overflow-hidden border border-[#005652]/30 bg-[#181c1c]">
-              <div className="px-4 py-1.5 text-[11px] font-code text-[#a5efe9] border-b border-[#2d3e3c]">
-                실행 (당신 GitHub 인증으로) — push/PR 만 사용자 몫
+              <div className="px-4 py-1.5 text-[11px] font-code text-[#a5efe9] border-b border-[#2d3e3c] flex items-center justify-between">
+                <span>실행 (당신 GitHub 인증으로) — push/PR 만 사용자 몫</span>
+                <button
+                  onClick={() => { navigator.clipboard.writeText(pr.gh || ''); const btn = document.getElementById('copy-gh-btn'); if(btn) { btn.textContent = '복사됨 ✓'; setTimeout(() => { btn.textContent = '복사'; }, 2000); } }}
+                  id="copy-gh-btn"
+                  className="text-[11px] font-bold text-[#a5efe9] bg-[#005652] hover:bg-[#1f6f6b] px-2.5 py-0.5 rounded transition-all"
+                >복사</button>
               </div>
               <pre className="p-3 text-[12px] font-code text-[#a5efe9] overflow-x-auto whitespace-pre-wrap">{pr.gh}</pre>
             </div>

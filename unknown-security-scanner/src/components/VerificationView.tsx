@@ -145,15 +145,7 @@ export const VerificationView: React.FC<VerificationViewProps> = ({
                 ? '첫 재검증 대기 중'
                 : `다음 자동 재검증까지 ${fmtCooldown(cooldownLeft)}`}
             </span>
-            {/* 수동 재검증 — 자동 on/off·쿨타임과 무관하게 항상 즉시 실행 가능 */}
-            <button
-              id="btn-instant-retest"
-              onClick={runRescan}
-              disabled={isRetesting}
-              className="text-[12px] font-bold text-white bg-[#005652] hover:bg-[#1f6f6b] px-3 py-1 rounded-md transition-all active:scale-95 disabled:opacity-50"
-            >
-              {isRetesting ? '재검증 중...' : '지금 재검증'}
-            </button>
+
           </div>
         </div>
       </div>
@@ -303,9 +295,9 @@ export const VerificationView: React.FC<VerificationViewProps> = ({
               const provenV = provenVulns.length;            // 재검증으로 소멸 확인
               const openV = unresolvedVulns.length;
               // 점수는 '증명(소멸 확인)' 기준 — 커밋만으론 안 침(정직).
-              const score = totalV > 0 ? Math.round((provenV / totalV) * 100) : 0;
+              const score = totalV > 0 ? Math.round((doneV / totalV) * 100) : 0;
               const provenKinds = Array.from(new Set(provenVulns.map((v) => v.type)));
-              const allClear = totalV > 0 && provenV === totalV;
+              const allClear = totalV > 0 && doneV === totalV;
               const summary = totalV === 0
                 ? '아직 스캔 결과가 없습니다.'
                 : provenV === 0

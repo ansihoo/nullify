@@ -141,6 +141,7 @@ export function App() {
         mode, canFix, summary, vulnerabilities: vulns, filteredNoise: noise,
       };
       setSessions((prev) => { const next = [session, ...prev].slice(0, 50); persistSessions(next); return next; });
+
       setActiveSessionId(session.id);
       // 0건이면 분석 대신 전용 '클린' 화면으로.
       resultTabRef.current = vulns.length ? 'analysis' : 'clear';
@@ -181,6 +182,17 @@ export function App() {
     } else {
       setScanNotice(null);
       setCurrentTab('analysis');
+    }
+  };
+
+  const handleDeleteSession = (id: string) => {
+    setSessions((prev) => {
+      const next = prev.filter((ss) => ss.id !== id);
+      persistSessions(next);
+      return next;
+    });
+    if (activeSessionId === id) {
+      setActiveSessionId(null);
     }
   };
 
@@ -395,6 +407,7 @@ export function App() {
             activeId={activeSessionId}
             onSelectSession={handleSelectSession}
             onNewScan={handleNewScan}
+            onDeleteSession={handleDeleteSession}
           />
         )}
 

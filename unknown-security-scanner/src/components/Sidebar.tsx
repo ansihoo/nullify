@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
 // 사이드바에 뿌릴 스캔 세션 요약(대화 목록 항목).
 export interface HistoryItem {
@@ -17,6 +17,7 @@ interface SidebarProps {
   activeId: string | null;
   onSelectSession: (id: string) => void;
   onNewScan: () => void;
+  onDeleteSession?: (id: string) => void;
 }
 
 const MODE_BADGE: Record<HistoryItem['mode'], { text: string; cls: string }> = {
@@ -30,7 +31,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   activeId,
   onSelectSession,
   onNewScan,
+  onDeleteSession,
 }) => {
+  const [menuId, setMenuId] = useState<string | null>(null);
   return (
     <aside
       id="workspace-sidebar"
@@ -64,29 +67,50 @@ export const Sidebar: React.FC<SidebarProps> = ({
               const isActive = h.id === activeId;
               const badge = MODE_BADGE[h.mode];
               return (
-                <li key={h.id}>
-                  <button
-                    onClick={() => onSelectSession(h.id)}
-                    className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors group ${
-                      isActive ? 'bg-[#e6efee] border border-[#a6d5d0]' : 'hover:bg-[#eceeed] border border-transparent'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2 mb-1">
-                      <span className={`font-code text-[12.5px] truncate ${isActive ? 'text-[#00403d] font-semibold' : 'text-[#3f4948]'}`}>
-                        {h.label}
-                      </span>
-                      <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded ${badge.cls}`}>
-                        {badge.text}
-                      </span>
+                <li key={h.id} className="relative group/item">
+                  <div className="flex items-start">
+                    <button
+                      onClick={() => onSelectSession(h.id)}
+                      className={`flex-1 text-left px-3 py-2.5 rounded-lg transition-colors ${
+                        isActive ? 'bg-[#e6efee] border border-[#a6d5d0]' : 'hover:bg-[#eceeed] border border-transparent'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <span className={`font-code text-[12.5px] truncate ${isActive ? 'text-[#00403d] font-semibold' : 'text-[#3f4948]'}`}>
+                          {h.label}
+                        </span>
+                        <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded ${badge.cls}`}>
+                          {badge.text}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[11px] text-[#8a938f]">
+                        <span>{h.ts}</span>
+                        {h.crit > 0 && <span className="text-[#c0392b] font-semibold">진짜 {h.crit}</span>}
+                        {h.ques > 0 && <span className="text-[#6a4bd0] font-semibold">질문 {h.ques}</span>}
+                        {h.warn > 0 && <span className="text-[#a5680b] font-semibold">경고 {h.warn}</span>}
+                        {h.crit === 0 && h.ques === 0 && h.warn === 0 && <span>이슈 없음</span>}
+                      </div>
+                    </button>
+                    {onDeleteSession && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setMenuId(menuId === h.id ? null : h.id); }}
+                        className="opacity-0 group-hover/item:opacity-100 shrink-0 mt-2.5 mr-1 p-1 rounded hover:bg-[#dde3e1] transition-all"
+                      >
+                        <span className="material-symbols-outlined text-[16px] text-[#6f7978]">more_vert</span>
+                      </button>
+                    )}
+                  </div>
+                  {menuId === h.id && onDeleteSession && (
+                    <div className="absolute right-2 top-10 z-50 bg-white border border-[#bec9c7] rounded-lg shadow-lg py-1 min-w-[120px]">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onDeleteSession(h.id); setMenuId(null); }}
+                        className="w-full text-left px-3 py-2 text-[13px] text-[#ba1a1a] hover:bg-[#fdf2e9] flex items-center gap-2"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">delete</span>
+                        삭제
+                      </button>
                     </div>
-                    <div className="flex items-center gap-2 text-[11px] text-[#8a938f]">
-                      <span>{h.ts}</span>
-                      {h.crit > 0 && <span className="text-[#c0392b] font-semibold">진짜 {h.crit}</span>}
-                      {h.ques > 0 && <span className="text-[#6a4bd0] font-semibold">질문 {h.ques}</span>}
-                      {h.warn > 0 && <span className="text-[#a5680b] font-semibold">경고 {h.warn}</span>}
-                      {h.crit === 0 && h.ques === 0 && h.warn === 0 && <span>이슈 없음</span>}
-                    </div>
-                  </button>
+                  )}
                 </li>
               );
             })}
