@@ -1,0 +1,121 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --primary: #005652;
+    --primary-container: #1f6f6b;
+    --on-primary-container: #a5efe9;
+    --primary-fixed: #a6f0ea;
+    --primary-fixed-dim: #8ad3ce;
+    --surface: #f7faf9;
+    --background: #f7faf9;
+    --surface-container-lowest: #ffffff;
+    --surface-container-low: #f1f4f3;
+    --surface-container: #eceeed;
+    --surface-container-high: #e6e9e7;
+    --surface-container-highest: #e0e3e2;
+    --on-surface: #181c1c;
+    --on-surface-variant: #3f4948;
+    --outline: #6f7978;
+    --outline-variant: #bec9c7;
+    --error: #ba1a1a;
+    --error-container: #ffdad6;
+    --on-error-container: #93000a;
+    --tertiary: #753d25;
+    --tertiary-container: #92543a;
+    --on-tertiary-container: #ffdacc;
+    --secondary-container: #d5e0f7;
+    --on-secondary-container: #586377;
+  }
+
+  body {
+    font-family: 'Hanken Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: #181c1c;
+    background-color: #f7faf9;
+  }
+
+  code, pre, .font-code {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  vertical-align: middle;
+  line-height: 1;
+}
+
+.material-symbols-outlined.filled {
+  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+.loading-ring {
+  display: inline-block;
+  position: relative;
+  width: 80px;
+  height: 80px;
+}
+
+.loading-ring div {
+  box-sizing: border-box;
+  display: block;
+  position: absolute;
+  width: 64px;
+  height: 64px;
+  margin: 8px;
+  border: 4px solid transparent;
+  border-radius: 50%;
+  animation: loading-ring-anim 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+  border-color: #1F6F6B transparent transparent transparent;
+}
+
+.loading-ring div:nth-child(1) {
+  animation-delay: -0.45s;
+}
+.loading-ring div:nth-child(2) {
+  animation-delay: -0.3s;
+}
+.loading-ring div:nth-child(3) {
+  animation-delay: -0.15s;
+}
+
+@keyframes loading-ring-anim {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes pulse-dot {
+  0% { opacity: 0.3; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.1); }
+  100% { opacity: 0.3; transform: scale(0.9); }
+}
+
+.pulse-dot {
+  animation: pulse-dot 1.5s infinite ease-in-out;
+}
+
+.custom-shadow {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+}
+
+.focus-shadow:focus-within {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
+  border-color: #1f6f6b;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #d8dbd9;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #bec9c7;
+}
+
