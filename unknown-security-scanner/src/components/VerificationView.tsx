@@ -19,6 +19,28 @@ export const VerificationView: React.FC<VerificationViewProps> = ({
   onRescan,
 }) => {
   const [progress, setProgress] = useState<number>(0);
+  // ── 재스캔 쿨타임: 하루(24h)에 한 번. 마지막 스캔 시각을 localStorage 에 저장 ──
+  const COOLDOWN_MS = 24 * 60 * 60 * 1000;
+  const [lastScan, setLastScan] = useState<number>(() => {
+    const v = localStorage.getItem('nullify_last_rescan');
+    return v ? parseInt(v, 10) : 0;
+  });
+  const [now, setNow] = useState<number>(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const elapsed = now - lastScan;
+  const cooldownLeft = Math.max(0, COOLDOWN_MS - elapsed);
+  const canRescan = lastScan === 0 || cooldownLeft === 0;
+  const fmtCooldown = (ms: number) => {
+    const total = Math.ceil(ms / 1000);
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const sec = total % 60;
+    const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
+    return `${pad(h)}:${pad(m)}:${pad(sec)}`;
+  };
   const [chatInput, setChatInput] = useState<string>('');
   const [isRetesting, setIsRetesting] = useState<boolean>(false);
 
@@ -29,7 +51,8 @@ export const VerificationView: React.FC<VerificationViewProps> = ({
     return () => clearInterval(timer);
   }, []);
 
-  const handleInstantRetest = async () => {
+  const runRescan = async () => {
+    if (isRetesting) return;
     setIsRetesting(true);
     setProgress(0);
     try {
@@ -38,8 +61,19 @@ export const VerificationView: React.FC<VerificationViewProps> = ({
     } finally {
       setIsRetesting(false);
       setProgress(100);
+      const ts = Date.now();
+      setLastScan(ts);
+      localStorage.setItem('nullify_last_rescan', String(ts));   // 다음 쿨타임 시작
     }
   };
+  // 쿨타임이 끝나면(이미 한 번 스캔한 적 있으면) 자동으로 재검증 실행.
+  // 모든 상태(isRetesting)·함수(runRescan) 선언 이후라 참조 안전.
+  useEffect(() => {
+    if (lastScan !== 0 && cooldownLeft === 0 && !isRetesting) {
+      runRescan();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cooldownLeft, lastScan, isRetesting]);
 
   const handleChatSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,43 +125,25 @@ export const VerificationView: React.FC<VerificationViewProps> = ({
             </p>
           </div>
         </div>
-        <div className="text-right shrink-0">
+        <div className="flex flex-col items-end gap-2 shrink-0">
           <span className={`inline-block font-code text-xs font-bold bg-white px-3 py-1.5 rounded-lg border ${allClear ? 'text-[#00504d] border-[#8ad3ce]' : 'text-[#b5651d] border-[#e0b48a]'}`}>
             Exploit Block Rate: {blockRate}%
           </span>
+          <div className="flex items-center gap-2">
+            <span className="text-[12px] font-code text-[#6f7978] bg-[#eceeed] px-2.5 py-1 rounded-md">
+              {isRetesting
+                ? '자동 재검증 실행 중...'
+                : lastScan === 0
+                ? '첫 재검증 대기 중'
+                : `다음 자동 재검증까지 ${fmtCooldown(cooldownLeft)}`}
+            </span>
+          </div>
         </div>
       </div>
         );
       })()}
 
-      {/* Active Rescan Progress Banner */}
-      <div className="bg-white border border-[#bec9c7] rounded-2xl p-5 shadow-sm space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-[16px] text-[#181c1c]">
-              남은 취약점 {unresolvedVulns.length}건 — 자동 재스캔이 진행 중입니다
-            </span>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-[13px] font-code text-[#6f7978] bg-[#eceeed] px-2.5 py-1 rounded-md">
-              재검증 진행률 {Math.round(progress)}%
-            </span>
-            <button
-              id="btn-instant-retest"
-              onClick={handleInstantRetest}
-              disabled={isRetesting}
-              className="text-xs font-bold text-white bg-[#005652] hover:bg-[#1f6f6b] px-3 py-1.5 rounded-md transition-all active:scale-95 disabled:opacity-50"
-            >
-              {isRetesting ? '재검증 중...' : '지금 즉시 재스캔'}
-            </button>
-          </div>
-        </div>
 
-        {/* Progress Bar */}
-        <div className="w-full bg-[#eceeed] h-2 rounded-full overflow-hidden">
-          <div className="h-full transition-all duration-200 ease-linear rounded-full" style={{ width: `${progress}%`, backgroundColor: progress < 40 ? '#8ad3ce' : progress < 80 ? '#1f6f6b' : '#005652' }}></div>
-        </div>
-      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
