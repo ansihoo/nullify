@@ -1,191 +1,101 @@
 import React from 'react';
 
-interface SidebarProps {
-  currentTab: 'landing' | 'scanning' | 'analysis' | 'fix' | 'verify';
-  onSelectTab: (tab: 'analysis' | 'fix' | 'verify') => void;
-  onNewScan: () => void;
-  onReconnect: () => void;
-  unresolvedCount?: number;
-  resolvedCount?: number;
-  canFix?: boolean;   // 소스 레포 있음 → 수정/검증 탭 노출
+// 사이드바에 뿌릴 스캔 세션 요약(대화 목록 항목).
+export interface HistoryItem {
+  id: string;
+  label: string;      // 대상(URL/레포)에서 뽑은 표시 이름
+  ts: string;         // 사람이 읽는 시각
+  mode: 'detect' | 'source' | 'combined';
+  total: number;
+  crit: number;
+  ques: number;
+  warn: number;
 }
 
+interface SidebarProps {
+  history: HistoryItem[];
+  activeId: string | null;
+  onSelectSession: (id: string) => void;
+  onNewScan: () => void;
+}
+
+const MODE_BADGE: Record<HistoryItem['mode'], { text: string; cls: string }> = {
+  detect:   { text: '탐지', cls: 'bg-[#e7f1fd] text-[#1a4d80]' },
+  source:   { text: '소스', cls: 'bg-[#efe9fb] text-[#5a3fb0]' },
+  combined: { text: '완전체', cls: 'bg-[#dcf0f3] text-[#00504d]' },
+};
+
 export const Sidebar: React.FC<SidebarProps> = ({
-  currentTab,
-  onSelectTab,
+  history,
+  activeId,
+  onSelectSession,
   onNewScan,
-  onReconnect,
-  unresolvedCount = 3,
-  resolvedCount = 2,
-  canFix = false,
 }) => {
   return (
     <aside
       id="workspace-sidebar"
-      className="h-screen w-64 fixed left-0 top-0 border-r border-[#bec9c7] bg-[#f7faf9] flex flex-col py-6 z-50 transition-all"
+      className="h-screen w-64 fixed left-0 top-0 border-r border-[#bec9c7] bg-[#f7faf9] flex flex-col z-50"
     >
-      {/* Brand Header */}
-      <div className="px-6 mb-6">
-        <h1 
-          onClick={onReconnect}
-          className="text-[24px] font-bold text-[#005652] cursor-pointer hover:opacity-90 tracking-tight"
-        >
-          Unknown
-        </h1>
-        <p className="text-[12px] font-bold tracking-wider text-[#3f4948] uppercase mt-0.5">
-          보안 워크스페이스
-        </p>
-      </div>
-
-      {/* New Scan CTA Button */}
-      <div className="px-4 mb-4">
+      {/* 브랜드 + 신규 스캔 */}
+      <div className="px-4 py-4 border-b border-[#e0e3e2]">
+        <div className="text-[20px] font-bold text-[#005652] tracking-tight mb-3">Unknown</div>
         <button
-          id="sidebar-new-scan-btn"
+          id="sidebar-new-scan"
           onClick={onNewScan}
-          className="w-full bg-[#005652] text-white py-2.5 px-4 rounded-lg text-[15px] font-bold flex items-center justify-center gap-2 hover:bg-[#1f6f6b] active:scale-[0.98] transition-all shadow-sm"
+          className="w-full flex items-center justify-center gap-2 bg-[#1f6f6b] text-white py-2.5 rounded-lg font-semibold text-[14px] hover:bg-[#005652] active:scale-[0.98] transition-all shadow-sm"
         >
-          <span className="material-symbols-outlined text-[20px]">add</span>
-          신규 스캔
+          <span className="material-symbols-outlined text-[18px]">add</span>
+          새 스캔
         </button>
       </div>
 
-      {/* Navigation Tabs */}
-      <nav className="flex-1 px-3 space-y-1.5 overflow-y-auto">
-        {/* Scan (Landing/Trigger) */}
-        <button
-          id="nav-tab-scan"
-          onClick={onReconnect}
-          className="w-full flex items-center justify-between px-4 py-3 text-[#3f4948] hover:bg-[#e6e9e7] transition-colors rounded-lg font-medium text-[15px] group text-left"
-        >
-          <div className="flex items-center gap-3">
-            <span className="material-symbols-outlined text-[#6f7978] group-hover:text-[#005652] transition-colors">
-              radar
-            </span>
-            <span>스캔</span>
-          </div>
-          <span className="text-[11px] text-[#6f7978] group-hover:text-[#005652] bg-[#eceeed] px-1.5 py-0.5 rounded font-code">
-            Live
-          </span>
-        </button>
-
-        {/* Analysis */}
-        <button
-          id="nav-tab-analysis"
-          onClick={() => onSelectTab('analysis')}
-          className={`w-full flex items-center justify-between px-4 py-3 rounded-lg font-medium text-[15px] transition-all text-left ${
-            currentTab === 'analysis'
-              ? 'bg-[#1f6f6b] text-[#a5efe9] font-bold shadow-sm'
-              : 'text-[#3f4948] hover:bg-[#e6e9e7]'
-          }`}
-        >
-          <div className="flex items-center gap-3">
-            <span
-              className={`material-symbols-outlined ${
-                currentTab === 'analysis' ? 'filled text-[#a5efe9]' : 'text-[#6f7978]'
-              }`}
-            >
-              analytics
-            </span>
-            <span>분석</span>
-          </div>
-          <span
-            className={`text-[12px] font-bold px-2 py-0.5 rounded-full ${
-              currentTab === 'analysis'
-                ? 'bg-[#00201e] text-[#a5efe9]'
-                : 'bg-[#ffdad6] text-[#93000a]'
-            }`}
-          >
-            {unresolvedCount}
-          </span>
-        </button>
-
-        {/* Fix — 탐지 전용(canFix=false)에선 숨김: 수정 스토리 자체가 없음 */}
-        {canFix && (
-        <button
-          id="nav-tab-fix"
-          onClick={() => onSelectTab('fix')}
-          className={`w-full flex items-center justify-between px-4 py-3 rounded-lg font-medium text-[15px] transition-all text-left ${
-            currentTab === 'fix'
-              ? 'bg-[#1f6f6b] text-[#a5efe9] font-bold shadow-sm'
-              : 'text-[#3f4948] hover:bg-[#e6e9e7]'
-          }`}
-        >
-          <div className="flex items-center gap-3">
-            <span
-              className={`material-symbols-outlined ${
-                currentTab === 'fix' ? 'filled text-[#a5efe9]' : 'text-[#6f7978]'
-              }`}
-            >
-              build
-            </span>
-            <span>수정</span>
-          </div>
-          <span
-            className={`text-[12px] font-bold px-2 py-0.5 rounded-full ${
-              currentTab === 'fix'
-                ? 'bg-[#00201e] text-[#a5efe9]'
-                : 'bg-[#eceeed] text-[#3f4948]'
-            }`}
-          >
-            PR 준비
-          </span>
-        </button>
-        )}
-
-        {/* Verification — 수정→재검증 흐름이라 탐지 전용에선 숨김 */}
-        {canFix && (
-        <button
-          id="nav-tab-verify"
-          onClick={() => onSelectTab('verify')}
-          className={`w-full flex items-center justify-between px-4 py-3 rounded-lg font-medium text-[15px] transition-all text-left ${
-            currentTab === 'verify'
-              ? 'bg-[#1f6f6b] text-[#a5efe9] font-bold shadow-sm'
-              : 'text-[#3f4948] hover:bg-[#e6e9e7]'
-          }`}
-        >
-          <div className="flex items-center gap-3">
-            <span
-              className={`material-symbols-outlined ${
-                currentTab === 'verify' ? 'filled text-[#a5efe9]' : 'text-[#6f7978]'
-              }`}
-            >
-              verified
-            </span>
-            <span>검증</span>
-          </div>
-          <span
-            className={`text-[12px] font-bold px-2 py-0.5 rounded-full ${
-              currentTab === 'verify'
-                ? 'bg-[#00201e] text-[#a5efe9]'
-                : 'bg-[#a6f0ea] text-[#00504d]'
-            }`}
-          >
-            {resolvedCount} 완료
-          </span>
-        </button>
-        )}
-      </nav>
-
-      {/* Footer Area with Reconnect Link and Profile */}
-      <div className="px-4 mt-auto pt-4 border-t border-[#bec9c7]/60 space-y-3">
-        <button
-          id="sidebar-reconnect-link"
-          onClick={onReconnect}
-          className="flex items-center gap-2 text-[#3f4948] hover:text-[#005652] text-[13px] font-medium transition-colors w-full px-2"
-        >
-          <span className="material-symbols-outlined text-[16px]">link</span>
-          <span>저장소 다시 연결</span>
-        </button>
-
-        <div className="flex items-center gap-3 px-3 py-2 bg-[#eceeed] rounded-lg">
-          <div className="w-8 h-8 rounded-full bg-[#8ad3ce] text-[#00201e] font-bold flex items-center justify-center text-xs">
-            UK
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-bold text-[#181c1c] truncate">사용자 프로필</p>
-            <p className="text-[11px] text-[#3f4948] truncate">Unknown 보안 도구</p>
-          </div>
+      {/* 스캔 히스토리(대화 목록) */}
+      <div className="flex-1 overflow-y-auto px-2 py-3">
+        <div className="px-2 mb-2 text-[11px] font-bold uppercase tracking-wider text-[#8a938f]">
+          스캔 기록
         </div>
+        {history.length === 0 ? (
+          <div className="px-3 py-6 text-[13px] text-[#8a938f] leading-relaxed">
+            아직 스캔 기록이 없습니다.<br />‘새 스캔’으로 시작하세요.
+          </div>
+        ) : (
+          <ul className="flex flex-col gap-1">
+            {history.map((h) => {
+              const isActive = h.id === activeId;
+              const badge = MODE_BADGE[h.mode];
+              return (
+                <li key={h.id}>
+                  <button
+                    onClick={() => onSelectSession(h.id)}
+                    className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors group ${
+                      isActive ? 'bg-[#e6efee] border border-[#a6d5d0]' : 'hover:bg-[#eceeed] border border-transparent'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <span className={`font-code text-[12.5px] truncate ${isActive ? 'text-[#00403d] font-semibold' : 'text-[#3f4948]'}`}>
+                        {h.label}
+                      </span>
+                      <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded ${badge.cls}`}>
+                        {badge.text}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px] text-[#8a938f]">
+                      <span>{h.ts}</span>
+                      {h.crit > 0 && <span className="text-[#c0392b] font-semibold">진짜 {h.crit}</span>}
+                      {h.ques > 0 && <span className="text-[#6a4bd0] font-semibold">질문 {h.ques}</span>}
+                      {h.warn > 0 && <span className="text-[#a5680b] font-semibold">경고 {h.warn}</span>}
+                      {h.crit === 0 && h.ques === 0 && h.warn === 0 && <span>이슈 없음</span>}
+                    </div>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
+      <div className="px-4 py-3 border-t border-[#e0e3e2] text-[11px] text-[#8a938f]">
+        결정론 검증 보안 스캐너
       </div>
     </aside>
   );

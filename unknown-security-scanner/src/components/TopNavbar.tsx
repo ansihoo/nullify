@@ -6,7 +6,10 @@ interface TopNavbarProps {
   onOpenHistory?: () => void;
   onOpenSettings?: () => void;
   onConnectClick?: () => void;
+  onNewScan?: () => void;
   repoUrl?: string;
+  canFix?: boolean;   // 소스 레포 있음 → 수정/검증 단계 노출
+  variant?: 'public' | 'workspace';   // App 이 크롬 표시를 직접 제어
 }
 
 export const TopNavbar: React.FC<TopNavbarProps> = ({
@@ -15,9 +18,12 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
   onOpenHistory,
   onOpenSettings,
   onConnectClick,
+  onNewScan,
   repoUrl,
+  canFix = false,
+  variant,
 }) => {
-  const isPublicLanding = currentTab === 'landing' || currentTab === 'scanning';
+  const isPublicLanding = variant ? variant === 'public' : (currentTab === 'landing' || currentTab === 'scanning');
 
   if (isPublicLanding) {
     return (
@@ -56,54 +62,65 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
     );
   }
 
-  // Dashboard / Workspace Top Header
+  // 워크스페이스 상단 — 진행 단계(스캔→분석→수정→검증) 스텝퍼
+  const steps: { key: 'scan' | 'analysis' | 'fix' | 'verify'; label: string; num: number }[] = [
+    { key: 'scan', label: '스캔', num: 1 },
+    { key: 'analysis', label: '분석', num: 2 },
+    ...(canFix ? [
+      { key: 'fix' as const, label: '수정', num: 3 },
+      { key: 'verify' as const, label: '검증', num: 4 },
+    ] : []),
+  ];
+  const activeKey = currentTab === 'scanning' ? 'scan' : currentTab;
+  const activeIdx = steps.findIndex((s) => s.key === activeKey);
+
+  const goStep = (key: 'scan' | 'analysis' | 'fix' | 'verify') => {
+    if (key === 'scan') onNewScan?.();
+    else onNavigateTab?.(key);
+  };
+
   return (
     <header id="top-navbar-workspace" className="fixed top-0 right-0 left-0 md:left-64 h-16 bg-[#f7faf9] border-b border-[#bec9c7] flex justify-between items-center px-6 z-40">
-      <div className="flex items-center gap-6">
-        <h2 className="text-[20px] font-bold text-[#005652] tracking-tight flex items-center gap-2">
-          Unknown Scanner
+      <div className="flex items-center gap-5 min-w-0">
+        <h2 className="text-[18px] font-bold text-[#005652] tracking-tight flex items-center gap-2 shrink-0">
+          Unknown
           {repoUrl && (
-            <span className="hidden lg:inline-block font-code text-[12px] font-normal text-[#545f72] bg-[#eceeed] px-2 py-0.5 rounded max-w-xs truncate">
-              {repoUrl.replace('https://github.com/', '')}
+            <span className="hidden lg:inline-block font-code text-[12px] font-normal text-[#545f72] bg-[#eceeed] px-2 py-0.5 rounded max-w-[280px] truncate">
+              {repoUrl.replace('https://github.com/', '').replace('https://', '')}
             </span>
           )}
         </h2>
+
+        {/* 진행 단계 스텝퍼 */}
         <nav className="hidden sm:flex items-center gap-1">
-          <button
-            onClick={() => onNavigateTab?.('analysis')}
-            className={`px-3 py-1.5 rounded-md text-[13px] font-bold tracking-wider transition-colors ${
-              currentTab === 'analysis'
-                ? 'text-[#005652] bg-[#a6f0ea]/40 font-semibold'
-                : 'text-[#3f4948] hover:text-[#181c1c] hover:bg-[#eceeed]'
-            }`}
-          >
-            대시보드
-          </button>
-          <button
-            onClick={onOpenHistory}
-            className="px-3 py-1.5 rounded-md text-[13px] font-bold tracking-wider text-[#3f4948] hover:text-[#181c1c] hover:bg-[#eceeed] transition-colors"
-          >
-            히스토리
-          </button>
-          <button
-            onClick={onOpenSettings}
-            className="px-3 py-1.5 rounded-md text-[13px] font-bold tracking-wider text-[#3f4948] hover:text-[#181c1c] hover:bg-[#eceeed] transition-colors"
-          >
-            설정
-          </button>
+          {steps.map((s, i) => {
+            const isActive = i === activeIdx;
+            const isDone = activeIdx >= 0 && i < activeIdx;
+            return (
+              <React.Fragment key={s.key}>
+                {i > 0 && <span className="material-symbols-outlined text-[16px] text-[#bec9c7]">chevron_right</span>}
+                <button
+                  onClick={() => goStep(s.key)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[13px] font-semibold transition-colors ${
+                    isActive ? 'bg-[#1f6f6b] text-white'
+                    : isDone ? 'text-[#005652] hover:bg-[#e6efee]'
+                    : 'text-[#8a938f] hover:bg-[#eceeed]'
+                  }`}
+                >
+                  <span className={`w-[18px] h-[18px] rounded-full flex items-center justify-center text-[11px] font-bold ${
+                    isActive ? 'bg-white text-[#1f6f6b]' : isDone ? 'bg-[#a6f0ea] text-[#00504d]' : 'bg-[#e0e3e2] text-[#8a938f]'
+                  }`}>
+                    {isDone ? '✓' : s.num}
+                  </span>
+                  {s.label}
+                </button>
+              </React.Fragment>
+            );
+          })}
         </nav>
       </div>
 
-      <div className="flex items-center gap-3">
-        <button
-          id="btn-nav-notifications"
-          onClick={onOpenHistory}
-          title="스캔 알림"
-          className="p-2 text-[#3f4948] hover:text-[#005652] rounded-full hover:bg-[#eceeed] transition-colors relative"
-        >
-          <span className="material-symbols-outlined text-[20px]">notifications</span>
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#ba1a1a] rounded-full"></span>
-        </button>
+      <div className="flex items-center gap-2 shrink-0">
         <button
           id="btn-nav-settings"
           onClick={onOpenSettings}
@@ -112,18 +129,6 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
         >
           <span className="material-symbols-outlined text-[20px]">settings</span>
         </button>
-        <div 
-          onClick={onOpenSettings}
-          className="w-8 h-8 rounded-full bg-[#d5e0f7] border border-[#bec9c7] overflow-hidden cursor-pointer hover:ring-2 hover:ring-[#005652] transition-all flex items-center justify-center"
-          title="보안 관리자"
-        >
-          <img
-            src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80"
-            alt="User Avatar"
-            className="w-full h-full object-cover"
-            referrerPolicy="no-referrer"
-          />
-        </div>
       </div>
     </header>
   );

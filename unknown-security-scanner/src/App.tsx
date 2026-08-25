@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { TopNavbar } from './components/TopNavbar';
 import { Sidebar } from './components/Sidebar';
 import { LandingView } from './components/LandingView';
@@ -16,8 +16,32 @@ import {
   SAMPLE_FILTERED_NOISE,
   INITIAL_SCAN_HISTORY,
 } from './data/mockSecurityData';
-import { Vulnerability, ChatMessage, ScanHistoryRecord } from './types';
+import { Vulnerability, ChatMessage, ScanHistoryRecord, FilteredNoiseItem } from './types';
 import { scanEntry, resolveIntent, generateFix, rescanTarget } from './api/nullify';
+
+// ── 스캔 세션(대화) 로컬 히스토리 — 브라우저 localStorage 에 저장, 스캔마다 갱신 ──
+const SESS_KEY = 'nullify_sessions';
+interface ScanSession {
+  id: string;
+  label: string;
+  ts: string;
+  mode: 'detect' | 'source' | 'combined';
+  canFix: boolean;
+  summary: { total: number; crit: number; ques: number; warn: number };
+  vulnerabilities: Vulnerability[];
+  filteredNoise: FilteredNoiseItem[];
+}
+function loadSessions(): ScanSession[] {
+  try { return JSON.parse(localStorage.getItem(SESS_KEY) || '[]'); } catch { return []; }
+}
+function persistSessions(s: ScanSession[]) {
+  try { localStorage.setItem(SESS_KEY, JSON.stringify(s.slice(0, 50))); } catch { /* 용량초과 등 무시 */ }
+}
+function labelOf(url: string, repo: string): string {
+  const pick = (repo || url || '').trim();
+  return pick.replace(/^https?:\/\//, '').replace('github.com/', '').replace(/\.git$/, '').replace(/\/$/, '')
+    || '로컬 데모 과녁';
+}
 
 export function App() {
   const [currentTab, setCurrentTab] = useState<'landing' | 'scanning' | 'analysis' | 'fix' | 'verify'>('landing');
@@ -26,7 +50,11 @@ export function App() {
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanNotice, setScanNotice] = useState<string | null>(null);   // 0건 등 정보성 안내
   const [canFix, setCanFix] = useState<boolean>(false);   // 소스 레포가 있어 '수정' 제공 가능?
+  const [sessions, setSessions] = useState<ScanSession[]>([]);       // 스캔 대화 히스토리
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const scanningRef = useRef<boolean>(false);   // 실제 스캔 진행중? (애니메이션과 경합 방지)
+
+  useEffect(() => { setSessions(loadSessions()); }, []);   // 최초 로드 시 히스토리 복원
   const [vulnerabilities, setVulnerabilities] = useState<Vulnerability[]>(INITIAL_VULNERABILITIES);
   const [selectedVuln, setSelectedVuln] = useState<Vulnerability>(INITIAL_VULNERABILITIES[0]);
   const [filteredNoise, setFilteredNoise] = useState(SAMPLE_FILTERED_NOISE);
@@ -81,6 +109,21 @@ export function App() {
       } else if (!vulns.length) {
         setScanNotice('재현/정적 모두에서 취약점을 찾지 못했습니다.');
       }
+      // 이 스캔을 히스토리(대화 목록)에 저장 — 스캔할 때마다 갱신.
+      const summary = {
+        total: vulns.length,
+        crit: vulns.filter((v) => v.severity === 'high' && v.status !== 'pending_intent').length,
+        ques: vulns.filter((v) => v.status === 'pending_intent').length,
+        warn: vulns.filter((v) => v.severity === 'medium').length,
+      };
+      const session: ScanSession = {
+        id: String(Date.now()),
+        label: labelOf(url, repo),
+        ts: new Date().toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
+        mode, canFix, summary, vulnerabilities: vulns, filteredNoise: noise,
+      };
+      setSessions((prev) => { const next = [session, ...prev].slice(0, 50); persistSessions(next); return next; });
+      setActiveSessionId(session.id);
     } catch (e: any) {
       setScanError(e?.message || String(e));
       setVulnerabilities([]);
@@ -95,6 +138,29 @@ export function App() {
   // 넘기지 않고, 위 handleStartScan 의 finally 가 넘기도록 둔다(경합 방지).
   const handleScanComplete = () => {
     if (!scanningRef.current) setCurrentTab('analysis');
+  };
+
+  // 히스토리 항목 클릭 → 그때 분석하던 결과를 그대로 복원(재스캔 없음).
+  const handleSelectSession = (id: string) => {
+    const s = sessions.find((x) => x.id === id);
+    if (!s) return;
+    setVulnerabilities(s.vulnerabilities);
+    setFilteredNoise(s.filteredNoise);
+    setCanFix(s.canFix);
+    if (s.vulnerabilities.length) setSelectedVuln(s.vulnerabilities[0]);
+    setRepoUrl(s.label);
+    setActiveSessionId(id);
+    setScanError(null);
+    setScanNotice(null);
+    setCurrentTab('analysis');
+  };
+
+  // 새 스캔 = 새 대화 시작(입력 화면으로).
+  const handleNewScan = () => {
+    setActiveSessionId(null);
+    setScanError(null);
+    setScanNotice(null);
+    setCurrentTab('landing');
   };
 
   const handleSelectVuln = (vuln: Vulnerability) => {
@@ -254,17 +320,23 @@ export function App() {
   const unresolvedCount = vulnerabilities.filter((v) => v.status !== 'resolved' && v.status !== 'ignored').length;
   const resolvedCount = vulnerabilities.filter((v) => v.status === 'resolved' || v.id === 'vuln-1' || v.id === 'vuln-2').length;
 
+  // 워크스페이스 크롬(사이드바+상단 스텝퍼) 표시 여부:
+  // 스캐닝 중엔 전체화면, '처음 랜딩(기록 없음)'만 마케팅 화면. 그 외엔 워크스페이스.
+  const showChrome = currentTab !== 'scanning' && !(currentTab === 'landing' && sessions.length === 0);
+
   return (
     <div className="min-h-screen bg-[#f7faf9] text-[#181c1c] flex flex-col font-sans selection:bg-[#a6f0ea] selection:text-[#00201e]">
       
-      {/* Top Navbar */}
+      {/* Top Navbar — 워크스페이스에선 진행 단계 스텝퍼 */}
       <TopNavbar
         currentTab={currentTab}
         onNavigateTab={(tab) => setCurrentTab(tab)}
-        onOpenHistory={() => setIsHistoryModalOpen(true)}
         onOpenSettings={() => setIsSettingsModalOpen(true)}
-        onConnectClick={() => setCurrentTab('landing')}
+        onConnectClick={handleNewScan}
+        onNewScan={handleNewScan}
         repoUrl={repoUrl}
+        canFix={canFix}
+        variant={showChrome ? 'workspace' : 'public'}
       />
 
       {/* 스캔 오류 배너 (백엔드 미기동/권한거부/인증 등) */}
@@ -282,26 +354,22 @@ export function App() {
         </div>
       )}
 
-      {/* Main Workspace Layout with Conditional Sidebar */}
+      {/* Main Workspace Layout — 좌측: 스캔 대화 히스토리 */}
       <div className="flex-1 flex w-full">
-        {currentTab !== 'landing' && currentTab !== 'scanning' && (
+        {showChrome && (
           <Sidebar
-            currentTab={currentTab}
-            onSelectTab={(tab) => setCurrentTab(tab)}
-            onNewScan={() => setCurrentTab('landing')}
-            onReconnect={() => setCurrentTab('landing')}
-            unresolvedCount={unresolvedCount}
-            resolvedCount={resolvedCount}
-            canFix={canFix}
+            history={sessions.map((s) => ({
+              id: s.id, label: s.label, ts: s.ts, mode: s.mode,
+              total: s.summary.total, crit: s.summary.crit, ques: s.summary.ques, warn: s.summary.warn,
+            }))}
+            activeId={activeSessionId}
+            onSelectSession={handleSelectSession}
+            onNewScan={handleNewScan}
           />
         )}
 
         <main
-          className={`flex-1 transition-all ${
-            currentTab !== 'landing' && currentTab !== 'scanning'
-              ? 'md:ml-64 pt-16'
-              : ''
-          }`}
+          className={`flex-1 transition-all ${showChrome ? 'md:ml-64 pt-16' : ''}`}
         >
           {currentTab === 'landing' && (
             <LandingView onStartScan={handleStartScan} />
