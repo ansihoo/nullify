@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -75,7 +76,7 @@ async function startServer() {
 3. 마크다운 형식을 사용하여 코드 블록이나 핵심 포인트를 보기 쉽게 정리하세요.`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.7-flash',
+        model: 'gemini-3.6-flash',
         contents: prompt,
       });
 
@@ -104,7 +105,7 @@ async function startServer() {
 초점: 실제 터지는(Exploitable) 취약점만 골라내고 노이즈는 제거함.`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.7-flash',
+        model: 'gemini-3.6-flash',
         contents: prompt,
       });
 
