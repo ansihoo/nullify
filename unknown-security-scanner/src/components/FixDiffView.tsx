@@ -308,17 +308,6 @@ ${vuln.codeSnippet.afterCode.split('\n').map((l) => `+ ${l}`).join('\n')}
         );
       })()}
 
-      {/* AI Remediation Guide Summary Card */}
-      <div className="bg-[#f1f4f3] rounded-2xl border border-[#e0e3e2] p-6 space-y-3">
-        <div className="flex items-center gap-2">
-          <span className="material-symbols-outlined text-[#005652]">smart_toy</span>
-          <h4 className="font-bold text-[16px] text-[#181c1c]">AI 보안 어시스턴트의 제안 메모</h4>
-        </div>
-        <p className="text-[14px] text-[#3f4948] leading-relaxed">
-          {vuln.aiGuide.bestPracticeTip} 이 패치를 적용하면 VibeShield 백엔드가 즉시 라이브 재현 테스트를 구동하여, 이전과 동일한 익스플로잇 페이로드가 정상 차단(403 또는 안전한 응답)되는지 자동으로 확인합니다.
-        </p>
-      </div>
-
     </div>
   );
 };
