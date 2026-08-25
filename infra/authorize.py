@@ -22,6 +22,7 @@ import urllib.parse
 # 기본 승인 목록 — 소유자가 확인한 대상(예: 내가 만든 테스트 사이트).
 _DEFAULT_ALLOW = {
     "case-intake-pro.lovable.app",   # 소유자 본인 소유 테스트 사이트
+    "case-intake-pro-vuln-target.vercel.app",   # 팀원이 만든 데모용 취약 과녁
 }
 ALLOWLIST = _DEFAULT_ALLOW | set(
     h.strip().lower()
