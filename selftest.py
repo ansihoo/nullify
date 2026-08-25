@@ -9,17 +9,17 @@
 GET 뿐 아니라 POST 케이스도 포함 — 능동 검증기 6종이 두 방식 모두에서 동작하는지 검증.
 """
 from vuln_app import serve_in_thread
-from verify_sqli import verify as v_sqli
-from verify_xss import verify as v_xss
-from verify_traversal import verify as v_trav
-from verify_idor import cross_account_test, enumerate_test
-from verify_cmdi import verify as v_cmd
-from verify_redirect import verify as v_red
-from verify_ssrf import verify as v_ssrf
-from verify_headers import verify as v_hdr
-from verify_secret import verify as v_sec
-from verify_component import verify as v_cmp
-from exploit_sqli import union_extract
+from verifiers.verify_sqli import verify as v_sqli
+from verifiers.verify_xss import verify as v_xss
+from verifiers.verify_traversal import verify as v_trav
+from verifiers.verify_idor import cross_account_test, enumerate_test
+from verifiers.verify_cmdi import verify as v_cmd
+from verifiers.verify_redirect import verify as v_red
+from verifiers.verify_ssrf import verify as v_ssrf
+from verifiers.verify_headers import verify as v_hdr
+from verifiers.verify_secret import verify as v_sec
+from verifiers.verify_component import verify as v_cmp
+from verifiers.exploit_sqli import union_extract
 
 srv = serve_in_thread(8020)
 B = "http://127.0.0.1:8020"

@@ -21,17 +21,17 @@ import http.server
 import urllib.parse
 
 # 엔진은 과녁(vuln_app)을 import 하지 않는다 — 오직 HTTP 로만 대화(진짜 외부 스캐너처럼).
-from verify_sqli import verify as verify_sqli
-from verify_xss import verify as verify_xss
-from verify_idor import cross_account_test, enumerate_test
-from verify_traversal import verify as verify_traversal
-from verify_cmdi import verify as verify_cmdi
-from verify_redirect import verify as verify_redirect
-from verify_ssrf import verify as verify_ssrf
-from verify_headers import verify as verify_headers
-from verify_secret import verify as verify_secret
-from verify_component import verify as verify_component
-from exploit_sqli import find_column_count, union_extract
+from verifiers.verify_sqli import verify as verify_sqli
+from verifiers.verify_xss import verify as verify_xss
+from verifiers.verify_idor import cross_account_test, enumerate_test
+from verifiers.verify_traversal import verify as verify_traversal
+from verifiers.verify_cmdi import verify as verify_cmdi
+from verifiers.verify_redirect import verify as verify_redirect
+from verifiers.verify_ssrf import verify as verify_ssrf
+from verifiers.verify_headers import verify as verify_headers
+from verifiers.verify_secret import verify as verify_secret
+from verifiers.verify_component import verify as verify_component
+from verifiers.exploit_sqli import find_column_count, union_extract
 from ingest import load_candidates
 from authorize import authorize
 from fixes import FIXES

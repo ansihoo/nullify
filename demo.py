@@ -3,7 +3,7 @@ Nullify 최소 데모: 취약 앱을 로컬에 띄우고 → 검증기로 두 �
 한 번에 실행:  python demo.py
 """
 from vuln_app import serve_in_thread
-from verify_sqli import verify
+from verifiers.verify_sqli import verify
 
 
 def show(title, url, expect):

@@ -13,8 +13,8 @@ import difflib
 
 import vuln_app
 from vuln_app import serve_in_thread, set_user_impl, query_vuln, query_safe
-from verify_sqli import verify
-from exploit_sqli import find_column_count, union_extract
+from verifiers.verify_sqli import verify
+from verifiers.exploit_sqli import find_column_count, union_extract
 
 PAYLOAD = "secret, name FROM users"   # UNION 으로 훔칠 대상
 
