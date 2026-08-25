@@ -128,11 +128,31 @@ def create_headers_fix(repo):
             stack = "static"   # express 인데 진입점 못 찾으면 정적 폴백
 
     if changed_rel is None:   # static (또는 express 폴백)
-        pub = os.path.join(repo, "public")
-        os.makedirs(pub, exist_ok=True)
-        body = "/*\n" + "".join("  %s: %s\n" % (h, v) for h, v in _SEC_HEADERS)
-        open(os.path.join(pub, "_headers"), "w", encoding="utf-8").write(body)
-        changed_rel = os.path.join("public", "_headers")
+        import json as _json
+        netlify = any(os.path.exists(os.path.join(repo, m))
+                      for m in ("netlify.toml", os.path.join("public", "_redirects"), "_redirects"))
+        if netlify:   # Netlify/Cloudflare Pages 는 public/_headers 를 읽는다.
+            pub = os.path.join(repo, "public")
+            os.makedirs(pub, exist_ok=True)
+            body = "/*\n" + "".join("  %s: %s\n" % (h, v) for h, v in _SEC_HEADERS)
+            open(os.path.join(pub, "_headers"), "w", encoding="utf-8").write(body)
+            changed_rel = os.path.join("public", "_headers")
+            stack = "static/netlify"
+        else:   # Vercel(및 기본): vercel.json 의 headers. 기존 있으면 병합.
+            vpath = os.path.join(repo, "vercel.json")
+            try:
+                conf = _json.load(open(vpath, encoding="utf-8")) if os.path.exists(vpath) else {}
+                if not isinstance(conf, dict):
+                    conf = {}
+            except Exception:
+                conf = {}
+            conf["headers"] = [{
+                "source": "/(.*)",
+                "headers": [{"key": h, "value": v} for h, v in _SEC_HEADERS],
+            }]
+            open(vpath, "w", encoding="utf-8").write(_json.dumps(conf, ensure_ascii=False, indent=2) + "\n")
+            changed_rel = "vercel.json"
+            stack = "static/vercel"
 
     _git(repo, "add", changed_rel)
     _commit(repo, title)
@@ -146,11 +166,62 @@ def create_headers_fix(repo):
             "diff": diff, "fix_source": "catalog(headers/%s)" % stack, "gh": gh}
 
 
+def create_secret_fix(repo):
+    """하드코딩된 시크릿(AWS 키 AKIA... 형태)을 소스에서 제거하고 커밋한다.
+       완전체 스캔이면 레포가 있으니, 번들에 새는 하드코딩 키 리터럴을 실제로 지운다.
+       → 재배포 후 번들에서 사라져 재검증이 FALSE_POSITIVE(죽음)로 확인된다."""
+    import re
+    ensure_repo(repo)
+    base = _git(repo, "rev-parse", "--abbrev-ref", "HEAD").strip() or "main"
+    rx = re.compile(r"""(["'])AKIA[0-9A-Z]{12,}\1""")
+    repl = '"" /* [VibeShield] 하드코딩 시크릿 제거 — 서버측/시크릿 매니저로 이전 */'
+
+    # 1) 먼저 읽기만 해서 대상 파일을 찾는다(git 안 건드림).
+    targets = []
+    for dirpath, dirs, files in os.walk(repo):
+        dirs[:] = [d for d in dirs if d not in ("node_modules", ".git", "dist", "build")]
+        for name in files:
+            if not name.endswith((".js", ".ts", ".tsx", ".jsx", ".mjs", ".cjs")):
+                continue
+            p = os.path.join(dirpath, name)
+            try:
+                if os.path.getsize(p) > 2_000_000:
+                    continue
+                if rx.search(open(p, encoding="utf-8").read()):
+                    targets.append(p)
+            except (OSError, UnicodeDecodeError):
+                continue
+
+    if not targets:
+        return {"kind": "secret", "needs_review": True,
+                "reason": "하드코딩된 AWS 키(AKIA...)를 소스에서 찾지 못했습니다. 다른 형태의 시크릿은 수동 확인이 필요합니다."}
+
+    # 2) 브랜치 만들고 실제로 치환·커밋.
+    branch = "nullify/fix-secret"
+    title = "fix(security): 하드코딩된 시크릿 제거"
+    _git(repo, "checkout", "-q", "-B", branch, base)
+    for p in targets:
+        src = open(p, encoding="utf-8").read()
+        open(p, "w", encoding="utf-8").write(rx.sub(repl, src))
+        _git(repo, "add", os.path.relpath(p, repo))
+    _commit(repo, title)
+    commit = _git(repo, "rev-parse", "--short", "HEAD").strip()
+    diff = _git(repo, "show", "--no-color", "HEAD")
+    _git(repo, "checkout", "-q", base)
+    gh = ('git push -u origin %s\n'
+          'gh pr create --base %s --head %s --title "%s" --body "VibeShield 시크릿 제거 자동 수정"'
+          % (branch, base, branch, title))
+    return {"kind": "secret", "branch": branch, "commit": commit, "title": title,
+            "diff": diff, "fix_source": "catalog(secret/hardcoded)", "gh": gh}
+
+
 def create_fix(repo, kind, file_rel=None):
     """진짜 git 브랜치+커밋을 만들고 실제 diff 를 돌려준다.
-       kind=='headers' 는 스택 인식 자동수정 경로로 분기. 그 외는 카탈로그→LLM→검토 순."""
+       headers/secret 은 전용 자동수정 경로로 분기. 그 외는 카탈로그→LLM→검토 순."""
     if kind == "headers":
         return create_headers_fix(repo)
+    if kind == "secret":
+        return create_secret_fix(repo)
     ensure_repo(repo)
     spec = FIXES.get(kind)
     file_rel = file_rel or (spec["file"] if spec else "app.py")
