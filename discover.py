@@ -5,12 +5,12 @@
   scanner.py 는 Nuclei 리포트(또는 샘플 JSONL)에 의존한다. Nuclei 가 설치돼 있지 않고
   대상이 우리 데모 토이 앱이 아니면, 샘플의 토이 경로(/user, /search...)는 실제 앱에
   존재하지 않아 '찔러볼 곳'이 하나도 없다. 이 모듈은 대상 앱을 직접 훑어서
-  "어디를(경로) 무슨 파라미터로 찔러볼지" 목록을 만든다.
+  "어디를(경로) 무슨 파라미터로, 어떤 방식(GET/POST)으로 찔러볼지" 목록을 만든다.
 
 두 전략을 함께 쓴다 (실제 DAST 스캐너와 동일한 구성):
   (A) 크롤(crawl): 시작 페이지에서 <a href>, <form>, <script src> 를 따라가며
       링크·폼·쿼리 파라미터를 수집한다. 같은 출처(same-origin)만, 페이지 수·깊이 제한.
-      → 링크로 연결된 '정상' 앱에서 잘 먹는다.
+      → 링크로 연결된 '정상' 앱에서 잘 먹는다. 폼의 method(GET/POST) 도 읽어 담는다.
   (B) 탐침(probe): 크롤로는 안 걸리는 '링크 없는' 엔드포인트를 위해,
       흔한 경로+파라미터 소사전으로 직접 찔러 404 가 아닌 것만 후보로 채택한다.
       → 인덱스 페이지가 없는 API 형태 앱(우리 토이 앱 포함)에서 필요.
@@ -21,11 +21,6 @@
   (= 발견은 재현율/recall 을 챙기고, 정밀도/precision 은 검증기가 책임진다.)
 
 stdlib 만 사용: urllib(요청/URL), html.parser(HTML 파싱). BeautifulSoup 같은 외부 의존 없음.
-
-2026-08-25: 폼의 method(GET/POST) 를 인식해 후보에 담는다.
-  form 튜플 순서 = (action, method, [input names]).
-  후보 dict 에 "method" 필드 포함, scanner 라벨에 방식 표시(discover(form/get|post)).
-  ※ 두 작업자가 같은 기능을 동시에 구현 → 이 버전으로 통일(병합).
 """
 import urllib.request
 import urllib.parse
@@ -81,7 +76,8 @@ def _kinds_for_param(name):
 
 
 class _LinkParser(HTMLParser):
-    """<a href>, <form action>+<input name>, <script src> 만 뽑는 최소 파서."""
+    """<a href>, <form action>+<input name>, <script src> 만 뽑는 최소 파서.
+    forms 는 (action, method, [input names]) 3-튜플로 method 까지 담는다."""
     def __init__(self):
         super().__init__()
         self.links = []          # href 문자열들
@@ -254,7 +250,8 @@ def probe(base, timeout=4):
         k = (kind, path, "")
         if k not in seen_cand:
             seen_cand.add(k)
-            out.append({"kind": kind, "path": path, "param": "", "method": "GET", "scanner": "discover(probe)"})
+            out.append({"kind": kind, "path": path, "param": "", "method": "GET",
+                        "scanner": "discover(probe)"})
     return out
 
 
