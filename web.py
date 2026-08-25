@@ -10,9 +10,10 @@ Nullify 웹 스켈레톤 (버릴 수 있는 최소본).
 
 실행:  python web.py   → http://127.0.0.1:8000
 
-2026-08-25: 능동 검증기(sqli/xss/cmdi/traversal/redirect/ssrf) 의 scan_* 함수에
-method 인자 추가. discover 가 폼에서 발견한 method(GET/POST)를 run_scan 이 후보에서
-읽어 검증기까지 전달한다. 수동/특수(secret/headers/component/idor)는 method 를 받되 무시.
+2026-08-25: POST 파라미터 검증 지원. 능동 검증기(sqli/xss/cmdi/traversal/redirect/ssrf)의
+scan_* 함수에 method 인자 추가. discover 가 폼에서 발견한 method(GET/POST)를 run_scan 이
+후보에서 읽어 검증기까지 전달. 수동/특수(secret/headers/component/idor)는 method 무시.
+(두 작업자 병합: finding 에 method 기록 + 공격재현도 method 전달 + SCANNERS 는 전 kind 에 method 전달)
 """
 import json
 import inspect
@@ -114,22 +115,20 @@ def secrets_from(body):
 
 
 def scan_sqli(base, path, param="id", method="GET"):
-    # (변경) method 인자 추가 → verify_sqli 에 전달. GET 이면 기존과 완전 동일.
-    #        공격 재현(union_extract 등)은 GET 기반이라 그대로 둔다 —
-    #        POST 폼이라도 '취약 판정'은 method 로 하고, 데이터 탈취 증명은 GET 로.
+    # (변경) method 인자 추가 → verify_sqli 에 전달. 공격 재현(union_extract 등)도 method 로.
     url = base + path
     v, reason, _ = verify_sqli(url, param, method=method)
-    f = {"type": "SQL Injection", "endpoint": path, "verdict": v, "reason": reason}
+    f = {"type": "SQL Injection", "endpoint": path, "verdict": v, "reason": reason, "method": method}
     if v != "CONFIRMED":
         f["severity"] = "info"
         return f
-    find_column_count(url, param)
-    _, body = union_extract(url, "secret, name FROM users", param)
+    find_column_count(url, param, method=method)
+    _, body = union_extract(url, "secret, name FROM users", param, method=method)
     before = secrets_from(body)
     patch = patch_for("sqli")
     control(base, "sqli", "safe")                      # 패치 배포(= CI 재배포 대역)
     va, _, _ = verify_sqli(url, param, method=method)
-    _, body_a = union_extract(url, "secret, name FROM users", param)
+    _, body_a = union_extract(url, "secret, name FROM users", param, method=method)
     after = secrets_from(body_a)
     control(base, "sqli", "vuln")                      # 데모 반복 위해 원복
     f.update(severity="critical", proof_label="훔친 secret", proof=before, patch=patch,
@@ -140,10 +139,10 @@ def scan_sqli(base, path, param="id", method="GET"):
 
 
 def scan_xss(base, path, param="q", method="GET"):
-    # (변경) method 인자 추가 → verify_xss 에 전달(검증·재검증 양쪽). GET 이면 기존과 동일.
+    # (변경) method 인자 추가 → verify_xss 에 전달(검증·재검증 양쪽).
     url = base + path
     v, reason, ev = verify_xss(url, param, method=method)
-    f = {"type": "Reflected XSS", "endpoint": path, "verdict": v, "reason": reason}
+    f = {"type": "Reflected XSS", "endpoint": path, "verdict": v, "reason": reason, "method": method}
     if v != "CONFIRMED":
         f["severity"] = "info"
         return f
@@ -163,7 +162,7 @@ def scan_traversal(base, path, param="file", method="GET"):
     # (변경) method 인자 추가 → verify_traversal 에 전달(검증·재검증 양쪽).
     url = base + path
     v, reason, ev = verify_traversal(url, param, method=method)
-    f = {"type": "Path Traversal", "endpoint": path, "verdict": v, "reason": reason}
+    f = {"type": "Path Traversal", "endpoint": path, "verdict": v, "reason": reason, "method": method}
     if v != "CONFIRMED":
         f["severity"] = "info"
         return f
@@ -189,7 +188,7 @@ def scan_cmdi(base, path, param="host", method="GET"):
     # (변경) method 인자 추가 → verify_cmdi 에 전달(검증·재검증 양쪽).
     url = base + path
     v, reason, ev = verify_cmdi(url, param, method=method)
-    f = {"type": "Command Injection", "endpoint": path, "verdict": v, "reason": reason}
+    f = {"type": "Command Injection", "endpoint": path, "verdict": v, "reason": reason, "method": method}
     if v != "CONFIRMED":
         f["severity"] = "info"
         return f
@@ -204,7 +203,7 @@ def scan_redirect(base, path, param="next", method="GET"):
     # (변경) method 인자 추가 → verify_redirect 에 전달(검증·재검증 양쪽).
     url = base + path
     v, reason, ev = verify_redirect(url, param, method=method)
-    f = {"type": "Open Redirect", "endpoint": path, "verdict": v, "reason": reason}
+    f = {"type": "Open Redirect", "endpoint": path, "verdict": v, "reason": reason, "method": method}
     if v != "CONFIRMED":
         f["severity"] = "info"
         return f
@@ -221,7 +220,7 @@ def scan_ssrf(base, path, param="url", method="GET"):
     url = base + path
     internal = base + "/internal"
     v, reason, ev = verify_ssrf(url, internal, param, method=method)
-    f = {"type": "SSRF", "endpoint": path, "verdict": v, "reason": reason}
+    f = {"type": "SSRF", "endpoint": path, "verdict": v, "reason": reason, "method": method}
     if v != "CONFIRMED":
         f["severity"] = "info"
         return f
@@ -336,6 +335,7 @@ def resolve_idor(base, answer, path="/order", param="id"):
 
 SCANNERS = {
     # 능동 검증기: 4번째 인자 m(method) 을 실제로 전달한다(GET/POST 자동 인지).
+    #  ※ 병합 주의: 팀원 버전은 redirect/ssrf 에 method 를 안 넘겨 POST 가 유실됐음 → 여기서 전 kind 전달로 수정.
     "sqli": lambda b, p, pr, m="GET": scan_sqli(b, p, pr or "id", method=m),
     "xss": lambda b, p, pr, m="GET": scan_xss(b, p, pr or "q", method=m),
     "traversal": lambda b, p, pr, m="GET": scan_traversal(b, p, pr or "file", method=m),
@@ -388,7 +388,7 @@ def run_scan(base, prefer_discover=False):
                  "severity": "info", "reason": "이 종류의 검증기가 아직 없음"}
         f["scanner"] = c.get("scanner", "")    # 스캐너의 원래 주장(오탐 대비용)
         f["kind"] = c["kind"]                  # 수정 PR 생성 시 어떤 패치인지
-        f["method"] = c.get("method", "GET")   # 어떤 방식으로 검증했는지 기록(표시용)
+        f.setdefault("method", c.get("method", "GET"))   # 어떤 방식으로 검증했는지 기록(표시용)
         findings.append(f)
     findings.sort(key=lambda x: RANK.get(x["severity"], 9))
     crit = sum(1 for f in findings if f["severity"] == "critical")

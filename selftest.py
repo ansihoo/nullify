@@ -93,6 +93,31 @@ all_ok = all_ok and ok
 print(("[PASS]" if ok else "[FAIL]"), "IDOR 열거 일반화".ljust(22),
       "user:%s nope:%s" % (leaked_enum, leaked_none), "(기대: True / False)")
 
+# POST 파라미터 경로 — 공격재현(탈취)도 POST 바디로 되는지(검증기 POST 확장 완결 확인).
+# vuln_app 이 do_POST 를 지원하므로 같은 UNION 탈취가 POST 로도 성립해야 한다.
+_, body_post = union_extract(B + "/user", "secret, name FROM users", method="POST")
+stolen_post = [ln.split(",")[0] for ln in body_post.splitlines() if "-secret" in ln]
+ok = (len(stolen_post) == 3)
+all_ok = all_ok and ok
+print(("[PASS]" if ok else "[FAIL]"), "SQLi 공격재현 POST".ljust(22), "%d건" % len(stolen_post), "(기대: 3건)")
+
+# discovery 가 <form method=post> 를 POST 후보로 실어보내는지 — POST 배선 회귀 가드.
+import http.server as _h, socketserver as _s, threading as _t
+_FORM = b'<html><body><form action="/login" method="post"><input name=id></form></body></html>'
+class _FH(_h.BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200); self.send_header("Content-Type", "text/html")
+        self.send_header("Content-Length", str(len(_FORM))); self.end_headers(); self.wfile.write(_FORM)
+    def log_message(self, *a): pass
+class _FS(_s.ThreadingMixIn, _h.HTTPServer): daemon_threads = True
+_fsrv = _FS(("127.0.0.1", 8027), _FH); _t.Thread(target=_fsrv.serve_forever, daemon=True).start()
+_form_cands = discover.crawl("http://127.0.0.1:8027")
+has_post = any(c["path"] == "/login" and c.get("method") == "POST" for c in _form_cands)
+_fsrv.shutdown()
+all_ok = all_ok and has_post
+print(("[PASS]" if has_post else "[FAIL]"), "Discover 폼 POST 인식".ljust(22),
+      "post후보:%s" % has_post, "(기대: True)")
+
 print("=" * 56)
 print("전체 결과:", "PASS — 전부 통과" if all_ok else "FAIL — 문제 있음")
 srv.shutdown()

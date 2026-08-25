@@ -21,6 +21,11 @@
   (= 발견은 재현율/recall 을 챙기고, 정밀도/precision 은 검증기가 책임진다.)
 
 stdlib 만 사용: urllib(요청/URL), html.parser(HTML 파싱). BeautifulSoup 같은 외부 의존 없음.
+
+2026-08-25: 폼의 method(GET/POST) 를 인식해 후보에 담는다.
+  form 튜플 순서 = (action, method, [input names]).
+  후보 dict 에 "method" 필드 포함, scanner 라벨에 방식 표시(discover(form/get|post)).
+  ※ 두 작업자가 같은 기능을 동시에 구현 → 이 버전으로 통일(병합).
 """
 import urllib.request
 import urllib.parse
@@ -81,7 +86,7 @@ class _LinkParser(HTMLParser):
         super().__init__()
         self.links = []          # href 문자열들
         self.scripts = []        # script src 들
-        self.forms = []          # (action, [input names])
+        self.forms = []          # (action, method, [input names])
         self._cur_form = None
 
     def handle_starttag(self, tag, attrs):
@@ -91,13 +96,12 @@ class _LinkParser(HTMLParser):
         elif tag == "script" and a.get("src"):
             self.scripts.append(a["src"])
         elif tag == "form":
-            """(원본) self._cur_form = [a.get("action", ""), []]"""
-            # (변경) form 의 method 속성도 읽는다(없으면 HTML 기본값 GET).
-            #        [action, [input names], method] 3개 원소로 확장.
-            self._cur_form = [a.get("action", ""), [], (a.get("method", "get") or "get").upper()]
+            # HTML 기본 method 는 GET. POST 폼은 검증기를 POST 로 찔러야 한다.
+            method = (a.get("method") or "get").strip().upper()
+            self._cur_form = [a.get("action", ""), ("POST" if method == "POST" else "GET"), []]
         elif tag in ("input", "textarea", "select") and self._cur_form is not None:
             if a.get("name"):
-                self._cur_form[1].append(a["name"])
+                self._cur_form[2].append(a["name"])
 
     def handle_endtag(self, tag):
         if tag == "form" and self._cur_form is not None:
@@ -138,23 +142,21 @@ def _same_origin(base, url):
 
 
 def _add_param_candidate(seen, out, path, param, scanner_label, method="GET"):
-    """(path, param, kind) 중복 제거하며 후보 추가.
-    (변경) method 인자 추가(기본 GET). 폼에서 온 후보는 실제 method(GET/POST)를 담는다.
-           method 는 중복키에 넣지 않는다 — 같은 (kind,path,param)이면 한 번만."""
+    """(path, param, kind, method) 중복 제거하며 후보 추가. method 는 GET/POST(폼)."""
     for kind in _kinds_for_param(param):
-        key = (kind, path, param)
+        key = (kind, path, param, method)
         if key in seen:
             continue
         seen.add(key)
         out.append({"kind": kind, "path": path, "param": param,
-                    "scanner": scanner_label, "method": method})
-    # 주문/계정류 경로면 IDOR 도 한 번(경로 기준, 파라미터 무관).
+                    "method": method, "scanner": scanner_label})
+    # 주문/계정류 경로면 IDOR 도 한 번(경로 기준, 파라미터 무관). IDOR 는 GET 열거라 method 고정.
     if any(h in path.lower() for h in IDOR_PATH_HINTS):
-        key = ("idor", path, "")
+        key = ("idor", path, "", "GET")
         if key not in seen:
             seen.add(key)
             out.append({"kind": "idor", "path": path, "param": param,
-                        "scanner": scanner_label, "method": method})
+                        "method": "GET", "scanner": scanner_label})
 
 
 def crawl(base, max_pages=25, max_depth=2, timeout=5):
@@ -180,7 +182,7 @@ def crawl(base, max_pages=25, max_depth=2, timeout=5):
             k = ("headers", pu.path, "")
             if k not in seen_cand:
                 seen_cand.add(k)
-                out.append({"kind": "headers", "path": pu.path or "/", "param": "",
+                out.append({"kind": "headers", "path": pu.path or "/", "param": "", "method": "GET",
                             "scanner": "discover(crawl)"})
 
         # 이 URL 에 이미 쿼리 파라미터가 붙어 있으면 그것도 후보.
@@ -207,15 +209,15 @@ def crawl(base, max_pages=25, max_depth=2, timeout=5):
             if depth < max_depth and full.split("#")[0] not in visited:
                 queue.append((full, depth + 1))
 
-        # 폼: action 경로 + 각 input name 을 파라미터 후보로.
-        for action, names, fmethod in parser.forms:
+        # 폼: action 경로 + 각 input name 을 파라미터 후보로. 폼의 method(GET/POST) 반영.
+        for action, method, names in parser.forms:
             full = urllib.parse.urljoin(norm, action or norm)
             if not _same_origin(base, full):
                 continue
             apath = urllib.parse.urlparse(full).path or "/"
+            label = "discover(form/%s)" % method.lower()
             for name in names:
-                _add_param_candidate(seen_cand, out, apath, name,
-                                    "discover(form)", method=fmethod)
+                _add_param_candidate(seen_cand, out, apath, name, label, method)
 
         # 스크립트: .js 는 시크릿·컴포넌트 검증 후보.
         for src in parser.scripts:
@@ -227,7 +229,7 @@ def crawl(base, max_pages=25, max_depth=2, timeout=5):
                 k = (kind, spath, "")
                 if k not in seen_cand:
                     seen_cand.add(k)
-                    out.append({"kind": kind, "path": spath, "param": "",
+                    out.append({"kind": kind, "path": spath, "param": "", "method": "GET",
                                 "scanner": "discover(crawl)"})
     return out
 
@@ -252,12 +254,12 @@ def probe(base, timeout=4):
         k = (kind, path, "")
         if k not in seen_cand:
             seen_cand.add(k)
-            out.append({"kind": kind, "path": path, "param": "", "scanner": "discover(probe)"})
+            out.append({"kind": kind, "path": path, "param": "", "method": "GET", "scanner": "discover(probe)"})
     return out
 
 
 def discover(base, max_pages=25, max_depth=2, timeout=5):
-    """크롤 + 탐침을 합쳐 (kind, path, param) 중복 제거한 후보 리스트를 돌려준다.
+    """크롤 + 탐침을 합쳐 (kind, path, param, method) 중복 제거한 후보 리스트를 돌려준다.
     깊이·페이지 수는 환경변수로도 조정 가능(코드 수정 없이 튜닝):
       NULLIFY_CRAWL_DEPTH, NULLIFY_CRAWL_PAGES."""
     import os
@@ -265,7 +267,7 @@ def discover(base, max_pages=25, max_depth=2, timeout=5):
     max_pages = int(os.environ.get("NULLIFY_CRAWL_PAGES", max_pages))
     merged, seen = [], set()
     for c in crawl(base, max_pages, max_depth, timeout) + probe(base, timeout):
-        key = (c["kind"], c["path"], c["param"])
+        key = (c["kind"], c["path"], c["param"], c.get("method", "GET"))
         if key in seen:
             continue
         seen.add(key)
@@ -279,4 +281,5 @@ if __name__ == "__main__":
     cands = discover(tgt)
     print("대상:", tgt, "| 발견 후보:", len(cands))
     for c in sorted(cands, key=lambda x: (x["path"], x["kind"])):
-        print("  %-10s %-16s param=%-8s [%s]" % (c["kind"], c["path"], c["param"], c["scanner"]))
+        print("  %-10s %-16s param=%-8s method=%-4s [%s]" % (
+            c["kind"], c["path"], c["param"], c.get("method", "GET"), c["scanner"]))
