@@ -68,13 +68,19 @@ export function App() {
       setFilteredNoise(noise);
       setCanFix(canFix);
       if (vulns.length) setSelectedVuln(vulns[0]);
-      else setScanNotice(mode === 'source'
-        ? '정적 탐지 0건 — 이 레포엔 하드코딩 시크릿이 없습니다. 깊은 코드 분석(SQLi/XSS 등)은 서버에 semgrep 설치 시 활성화됩니다.'
-        : mode === 'combined'
-        ? '재현/정적 모두에서 취약점을 찾지 못했습니다.'
-        : '발견된 취약점 없음 — 이 대상에서 재현되는 취약점을 찾지 못했습니다.');
-      if (vulns.length && mode === 'detect') setScanNotice(
-        '탐지 전용 모드 — 발견만 표시합니다. 검증된 수정/PR을 받으려면 소스 레포도 함께 올리세요.');
+      // 레포만(SAST) 스캔: 런타임 항목(보안헤더·노출시크릿·구버전컴포넌트)은
+      // 소스만으론 못 봄 → 사이트 URL도 함께 넣어야 한다고 안내(핵심 혼란 방지).
+      if (mode === 'source') {
+        setScanNotice(vulns.length
+          ? '소스(SAST) 결과입니다. 보안 헤더·런타임 노출 같은 항목은 코드만으론 못 봐요 — 사이트 URL도 함께 넣으면 완전체로 검사됩니다.'
+          : '정적 탐지 0건 — 하드코딩 시크릿 없음. 보안 헤더 등 런타임 항목은 사이트 URL을, 깊은 코드 분석은 semgrep 설치를 함께 하세요.');
+      } else if (mode === 'detect') {
+        setScanNotice(vulns.length
+          ? '탐지 전용 모드 — 발견만 표시합니다. 검증된 수정/PR을 받으려면 소스 레포도 함께 올리세요.'
+          : '발견된 취약점 없음 — 이 대상에서 재현되는 취약점을 찾지 못했습니다.');
+      } else if (!vulns.length) {
+        setScanNotice('재현/정적 모두에서 취약점을 찾지 못했습니다.');
+      }
     } catch (e: any) {
       setScanError(e?.message || String(e));
       setVulnerabilities([]);
