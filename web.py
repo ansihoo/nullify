@@ -873,6 +873,25 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):                                      # 이 API 는 GET 전용
         self._json({"error": "method not allowed"}, code=405)
 
+    def do_OPTIONS(self):
+        # CORS 프리플라이트: 브라우저가 X-API-Token 같은 커스텀 헤더를 쓰는 요청 전에
+        # OPTIONS 를 먼저 보낸다. 여기서 허용 헤더/메서드를 알려주지 않으면 본 요청이 막힌다.
+        self.send_response(204)
+        self._cors()
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    def _cors(self):
+        # 별도 출처(프론트 dev 서버 :3000 등)에서 API 를 부를 수 있게 허용.
+        # 인증은 토큰(헤더/쿼리)이 담당하므로 Origin 은 요청한 값을 그대로 반사한다
+        # (자격증명 쿠키를 안 쓰므로 '*' 도 무방하지만, 반사가 향후 확장에 안전).
+        origin = self.headers.get("Origin", "*")
+        self.send_header("Access-Control-Allow-Origin", origin)
+        self.send_header("Vary", "Origin")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-API-Token")
+        self.send_header("Access-Control-Max-Age", "86400")
+
     def _json(self, obj, code=200):
         self._send(json.dumps(obj, ensure_ascii=False), "application/json; charset=utf-8", code)
 
@@ -881,6 +900,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
+        self._cors()
         self.end_headers()
         self.wfile.write(body)
 
