@@ -393,7 +393,9 @@ export async function scanEntry(urlIn: string, repoIn: string): Promise<{
   // URL 칸에 레포를 넣었으면 레포로 취급(관용).
   if (url && isGitRepo(url) && !repo) { repo = url; url = ''; }
 
-  const canFix = !!repo;                 // 소스가 있어야 수정 가능
+  // 소스가 있어야 수정 가능. 단 로컬 데모 과녁(127.0.0.1:8009)은 소스(sample_repo)를
+  // 우리가 알고 있으므로 예외적으로 수정 가능(데모 전체 루프 시연용).
+  const canFix = !!repo || isLocalDemo(url);
   const dast = url ? await scanTarget(url) : { vulnerabilities: [], filteredNoise: [] as FilteredNoiseItem[] };
   const sast = repo ? await scanSource(repo) : { vulnerabilities: [] as Vulnerability[] };
 
@@ -505,24 +507,13 @@ export async function generateFix(v: Vulnerability): Promise<FixResult> {
              reason: '탐지 전용 모드 — 소스 레포를 함께 올리면 검증된 수정을 생성합니다.' };
   }
 
-  // 1) 소스 레포가 있으면 실제 파일을 고친다(clone → create_fix).
-  if (isRepo && source) {
-    const url = `${API_BASE}/api/connect?source=${encodeURIComponent(source)}&kind=${encodeURIComponent(kind)}`;
-    const res = await fetch(url, { headers: authHeaders() });
-    if (!res.ok) return { ok: false, error: `레포 수정 실패 ${res.status}` };
-    const d = await res.json();
-    if (d.error) return { ok: false, error: d.error };
-    if (d.needs_review) return { ok: false, needsReview: true, reason: d.reason };
-    return { ok: true, branch: d.branch, commit: d.commit, title: d.title,
-             diff: d.diff, gh: d.gh, fixSource: d.fix_source };
-  }
-
-  // 2) 설정계열(DAST) → 소스 수정 불필요, 권고로 끝.
+  // 1) 설정계열(헤더/시크릿/컴포넌트) → 소스 수정 불필요, 권고로 끝(레포 유무 무관).
   if (CONFIG_KINDS.includes(kind)) {
     return { ok: true, recommendation: true };
   }
 
-  // 3) 로컬 데모(토이앱)는 소스가 sample_repo 이므로 실제 커밋 시연 가능.
+  // 2) 로컬 데모 과녁(토이앱)은 소스가 sample_repo 라 검증된 카탈로그 수정이 실제로 됨.
+  //    (실 커밋까지 만드는 전체 루프 시연 — 여기가 '진짜 되는' 데모 경로)
   if (isLocalDemo(target || source)) {
     const url = `${API_BASE}/api/pr?kind=${encodeURIComponent(kind)}`;
     const res = await fetch(url, { headers: authHeaders() });
@@ -534,7 +525,24 @@ export async function generateFix(v: Vulnerability): Promise<FixResult> {
              diff: d.diff, gh: d.gh, fixSource: d.fix_source };
   }
 
-  // 4) 임의 URL + 코드계열 → 소스가 없어 실제 코드 PR 불가.
+  // 3) 임의 소스 레포 → clone 후 실제 파일 수정 시도(/api/connect).
+  if (isRepo && source) {
+    const url = `${API_BASE}/api/connect?source=${encodeURIComponent(source)}&kind=${encodeURIComponent(kind)}`;
+    const res = await fetch(url, { headers: authHeaders() });
+    if (!res.ok) return { ok: false, error: `레포 수정 실패 ${res.status}` };
+    const d = await res.json();
+    // 카탈로그가 이 레포 구조와 안 맞으면(대상 파일 없음 등) 암호 같은 에러 대신 정직한 안내.
+    if (d.error && /대상 파일 없음|파일/.test(d.error)) {
+      return { ok: false, needsReview: true,
+               reason: '이 레포엔 자동 수정 카탈로그가 매칭되는 파일이 없습니다. 검증된 카탈로그 수정은 데모/알려진 구조에서 동작하고, 임의 레포는 LLM 수정(ANTHROPIC_API_KEY 설정) 또는 수동 수정이 필요합니다. — 동적으로 취약점은 확인됐으니(위 근거) 해당 위치를 직접 패치하세요.' };
+    }
+    if (d.error) return { ok: false, error: d.error };
+    if (d.needs_review) return { ok: false, needsReview: true, reason: d.reason };
+    return { ok: true, branch: d.branch, commit: d.commit, title: d.title,
+             diff: d.diff, gh: d.gh, fixSource: d.fix_source };
+  }
+
+  // 4) 그 외 → 소스가 없어 실제 코드 PR 불가.
   return { ok: false, needsRepo: true };
 }
 
