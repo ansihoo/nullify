@@ -67,7 +67,7 @@ print(("[PASS]" if ok else "[FAIL]"), "SQLi  공격재현(탈취)".ljust(26), "%
 
 # 후보 자동발견(discovery): 외부 스캐너 없이 임의 앱에서 엔드포인트를 찾는지.
 # 토이 앱은 인덱스가 없어 크롤로는 안 걸리므로 '탐침'이 핵심 경로를 찾아야 한다.
-import discover
+import discovery.discover as discover
 found_kinds = {c["kind"] for c in discover.discover(B)}
 need = {"sqli", "xss", "traversal", "cmdi", "ssrf", "redirect", "secret", "component", "headers"}
 missing = need - found_kinds
@@ -104,7 +104,7 @@ print(("[PASS]" if ok else "[FAIL]"), "SQLi 공격재현 POST".ljust(26), "%d건
 # Discover 폼 POST 인식 — 폼의 method 속성을 읽어 후보에 POST 를 담는지.
 # 여기선 discover 결과에 POST 후보가 하나라도 있는지만 확인(토이 앱엔 HTML 폼이 없어 항상 GET).
 # → 이 케이스는 폼이 있는 임의 앱을 대상으로 해야 의미가 있음. 여기선 파서 동작만 간접 확인.
-from discover import _LinkParser
+from discovery.discover import _LinkParser
 _p = _LinkParser()
 _p.feed('<form method="POST" action="/x"><input name="u"></form>')
 post_found = any(m == "POST" for _, m, _ in _p.forms)

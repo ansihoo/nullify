@@ -15,7 +15,7 @@ import shutil
 import tempfile
 import subprocess
 
-from ingest import load_candidates
+from discovery.ingest import load_candidates
 
 SAMPLE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scanner_report.jsonl")
 

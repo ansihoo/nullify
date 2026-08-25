@@ -32,11 +32,11 @@ from verifiers.verify_headers import verify as verify_headers
 from verifiers.verify_secret import verify as verify_secret
 from verifiers.verify_component import verify as verify_component
 from verifiers.exploit_sqli import find_column_count, union_extract
-from ingest import load_candidates
+from discovery.ingest import load_candidates
 from authorize import authorize
 from fixes import FIXES
-import scanner
-import sast
+import discovery.scanner as scanner
+import discovery.sast as sast
 import combine
 import github_pr
 import store

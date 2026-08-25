@@ -13,7 +13,7 @@ import json
 import shutil
 import subprocess
 
-import scan_source
+import discovery.scan_source as scan_source
 import github_pr
 
 SEV_MAP = {"ERROR": "high", "WARNING": "medium", "INFO": "low"}
