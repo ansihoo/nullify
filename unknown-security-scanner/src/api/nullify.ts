@@ -507,25 +507,8 @@ export async function generateFix(v: Vulnerability): Promise<FixResult> {
              reason: '탐지 전용 모드 — 소스 레포를 함께 올리면 검증된 수정을 생성합니다.' };
   }
 
-  // 1) 설정계열(헤더/시크릿/컴포넌트) → 소스 수정 불필요, 권고로 끝(레포 유무 무관).
-  if (CONFIG_KINDS.includes(kind)) {
-    return { ok: true, recommendation: true };
-  }
-
-  // 2) 로컬 데모 과녁(토이앱)은 소스가 sample_repo 라 검증된 카탈로그 수정이 실제로 됨.
-  //    (실 커밋까지 만드는 전체 루프 시연 — 여기가 '진짜 되는' 데모 경로)
-  if (isLocalDemo(target || source)) {
-    const url = `${API_BASE}/api/pr?kind=${encodeURIComponent(kind)}`;
-    const res = await fetch(url, { headers: authHeaders() });
-    if (!res.ok) return { ok: false, error: `PR 생성 실패 ${res.status}` };
-    const d = await res.json();
-    if (d.error) return { ok: false, error: d.error };
-    if (d.needs_review) return { ok: false, needsReview: true, reason: d.reason };
-    return { ok: true, branch: d.branch, commit: d.commit, title: d.title,
-             diff: d.diff, gh: d.gh, fixSource: d.fix_source };
-  }
-
-  // 3) 임의 소스 레포 → clone 후 실제 파일 수정 시도(/api/connect).
+  // 1) 소스 레포가 있으면 실제 파일을 고친다(/api/connect). 헤더 등 설정계열도 레포가 있으면
+  //    스택 인식으로 실제 커밋됨(_headers 파일/미들웨어). → 권고보다 우선.
   if (isRepo && source) {
     const url = `${API_BASE}/api/connect?source=${encodeURIComponent(source)}&kind=${encodeURIComponent(kind)}`;
     const res = await fetch(url, { headers: authHeaders() });
@@ -536,6 +519,23 @@ export async function generateFix(v: Vulnerability): Promise<FixResult> {
       return { ok: false, needsReview: true,
                reason: '이 레포엔 자동 수정 카탈로그가 매칭되는 파일이 없습니다. 검증된 카탈로그 수정은 데모/알려진 구조에서 동작하고, 임의 레포는 LLM 수정(ANTHROPIC_API_KEY 설정) 또는 수동 수정이 필요합니다. — 동적으로 취약점은 확인됐으니(위 근거) 해당 위치를 직접 패치하세요.' };
     }
+    if (d.error) return { ok: false, error: d.error };
+    if (d.needs_review) return { ok: false, needsReview: true, reason: d.reason };
+    return { ok: true, branch: d.branch, commit: d.commit, title: d.title,
+             diff: d.diff, gh: d.gh, fixSource: d.fix_source };
+  }
+
+  // 2) 소스 없는 설정계열(URL만) → 적용 불가, 권고(스택별 스니펫)로.
+  if (CONFIG_KINDS.includes(kind)) {
+    return { ok: true, recommendation: true };
+  }
+
+  // 3) 로컬 데모 과녁(토이앱)은 소스가 sample_repo 라 검증된 카탈로그 수정이 실제로 됨.
+  if (isLocalDemo(target || source)) {
+    const url = `${API_BASE}/api/pr?kind=${encodeURIComponent(kind)}`;
+    const res = await fetch(url, { headers: authHeaders() });
+    if (!res.ok) return { ok: false, error: `PR 생성 실패 ${res.status}` };
+    const d = await res.json();
     if (d.error) return { ok: false, error: d.error };
     if (d.needs_review) return { ok: false, needsReview: true, reason: d.reason };
     return { ok: true, branch: d.branch, commit: d.commit, title: d.title,

@@ -347,6 +347,22 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
                 <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
               </button>
             </>
+          ) : ((selectedVuln as any)._raw?.kind === 'headers') ? (
+            <div className="space-y-2">
+              <div className="text-[12px] text-[#3f5f5b]">
+                URL만 스캔이라 자동 적용은 불가 — 쓰는 스택에 맞게 복붙하세요. (레포도 올리면 자동 커밋)
+              </div>
+              {[
+                { l: 'Express', c: `app.use((req,res,next)=>{\n  res.setHeader('X-Frame-Options','DENY');\n  res.setHeader('Content-Security-Policy',"default-src 'self'");\n  res.setHeader('X-Content-Type-Options','nosniff');\n  next();\n});` },
+                { l: '정적 (public/_headers)', c: `/*\n  X-Frame-Options: DENY\n  Content-Security-Policy: default-src 'self'\n  X-Content-Type-Options: nosniff` },
+                { l: 'Nginx', c: `add_header X-Frame-Options "DENY" always;\nadd_header Content-Security-Policy "default-src 'self'" always;\nadd_header X-Content-Type-Options "nosniff" always;` },
+              ].map((s) => (
+                <div key={s.l}>
+                  <div className="text-[11px] font-bold text-[#005652] mb-0.5">{s.l}</div>
+                  <pre className="rounded-lg bg-[#181c1c] text-[#a5efe9] p-2.5 text-[11.5px] font-code overflow-x-auto whitespace-pre-wrap">{s.c}</pre>
+                </div>
+              ))}
+            </div>
           ) : (
             <div className="bg-[#eef4f3] border border-[#cfe0dd] rounded-lg p-3.5 text-[12.5px] text-[#3f5f5b] leading-relaxed">
               <span className="material-symbols-outlined text-[15px] align-middle mr-1 text-[#1f6f6b]">travel_explore</span>

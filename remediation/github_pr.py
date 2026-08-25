@@ -56,10 +56,101 @@ def connect_repo(source):
     return dest
 
 
+# 추가할 보안 헤더(설정계열 자동수정 공통).
+_SEC_HEADERS = [
+    ("X-Frame-Options", "DENY"),
+    ("Content-Security-Policy", "default-src 'self'"),
+    ("X-Content-Type-Options", "nosniff"),
+    ("Referrer-Policy", "no-referrer"),
+]
+
+
+def _detect_stack(repo):
+    """레포 파일로 스택을 결정론적으로 추정. (express | static)"""
+    pkg = os.path.join(repo, "package.json")
+    if os.path.exists(pkg):
+        try:
+            txt = open(pkg, encoding="utf-8").read()
+            if '"express"' in txt:
+                return "express"
+        except OSError:
+            pass
+    return "static"   # 정적 호스팅(_headers 파일)로 폴백 — 가장 널리 통함
+
+
+def _find_express_entry(repo):
+    """`= express()` 가 있는 서버 진입 파일을 찾는다(node_modules 제외)."""
+    import re
+    rx = re.compile(r"=\s*express\(\)")
+    for dirpath, dirs, files in os.walk(repo):
+        dirs[:] = [d for d in dirs if d not in ("node_modules", ".git", "dist", "build")]
+        for name in files:
+            if not name.endswith((".js", ".ts", ".mjs", ".cjs")):
+                continue
+            p = os.path.join(dirpath, name)
+            try:
+                if os.path.getsize(p) > 500_000:
+                    continue
+                src = open(p, encoding="utf-8").read()
+            except (OSError, UnicodeDecodeError):
+                continue
+            if rx.search(src):
+                return p, src
+    return None, None
+
+
+def create_headers_fix(repo):
+    """보안 헤더 누락(설정계열)을 스택에 맞춰 실제로 고치고 커밋한다.
+       express → setHeader 미들웨어 주입(의존성 추가 없음).
+       그 외(정적/Vite 등) → public/_headers 파일 생성(Netlify/Cloudflare 형식)."""
+    ensure_repo(repo)
+    base = _git(repo, "rev-parse", "--abbrev-ref", "HEAD").strip() or "main"
+    branch = "nullify/fix-headers"
+    title = "fix(security): 보안 헤더 추가 (X-Frame-Options, CSP 등)"
+    _git(repo, "checkout", "-q", "-B", branch, base)
+
+    stack = _detect_stack(repo)
+    changed_rel = None
+
+    if stack == "express":
+        path, src = _find_express_entry(repo)
+        if path:
+            mw = ("\n// [VibeShield] 보안 헤더 추가\napp.use((req, res, next) => {\n"
+                  + "".join("  res.setHeader('%s', %r);\n" % (h, v) for h, v in _SEC_HEADERS)
+                  + "  next();\n});\n")
+            # `const app = express();` 등 app 생성 줄 바로 뒤에 삽입.
+            import re
+            m = re.search(r".*=\s*express\(\).*\n", src)
+            new = src[:m.end()] + mw + src[m.end():] if m else src + mw
+            open(path, "w", encoding="utf-8").write(new)
+            changed_rel = os.path.relpath(path, repo)
+        else:
+            stack = "static"   # express 인데 진입점 못 찾으면 정적 폴백
+
+    if changed_rel is None:   # static (또는 express 폴백)
+        pub = os.path.join(repo, "public")
+        os.makedirs(pub, exist_ok=True)
+        body = "/*\n" + "".join("  %s: %s\n" % (h, v) for h, v in _SEC_HEADERS)
+        open(os.path.join(pub, "_headers"), "w", encoding="utf-8").write(body)
+        changed_rel = os.path.join("public", "_headers")
+
+    _git(repo, "add", changed_rel)
+    _commit(repo, title)
+    commit = _git(repo, "rev-parse", "--short", "HEAD").strip()
+    diff = _git(repo, "show", "--no-color", "HEAD")
+    _git(repo, "checkout", "-q", base)
+    gh = ('git push -u origin %s\n'
+          'gh pr create --base %s --head %s --title "%s" --body "VibeShield 보안 헤더 자동 수정"'
+          % (branch, base, branch, title))
+    return {"kind": "headers", "branch": branch, "commit": commit, "title": title,
+            "diff": diff, "fix_source": "catalog(headers/%s)" % stack, "gh": gh}
+
+
 def create_fix(repo, kind, file_rel=None):
     """진짜 git 브랜치+커밋을 만들고 실제 diff 를 돌려준다.
-       수정 도출: 카탈로그(결정론) → LLM(fixgen) → 전문가 검토, 순서로 시도.
-       실제 GitHub push/PR 는 하지 않는다(사용자 토큰 필요) — 명령만 만들어 준다."""
+       kind=='headers' 는 스택 인식 자동수정 경로로 분기. 그 외는 카탈로그→LLM→검토 순."""
+    if kind == "headers":
+        return create_headers_fix(repo)
     ensure_repo(repo)
     spec = FIXES.get(kind)
     file_rel = file_rel or (spec["file"] if spec else "app.py")

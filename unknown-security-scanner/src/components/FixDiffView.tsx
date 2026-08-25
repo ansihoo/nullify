@@ -257,16 +257,38 @@ ${vuln.codeSnippet.afterCode.split('\n').map((l) => `+ ${l}`).join('\n')}
         const pr = (vuln as any)._pr;
         if (!pr) return null;
         if (pr.recommendation) {
+          const kind = (vuln as any)._raw?.kind;
+          // 헤더는 스택별 복붙 스니펫을 제공(URL만 스캔이라 '적용'은 못 하고 조언).
+          const headerSnippets = kind === 'headers' ? [
+            { label: 'Express (Node)', lang: 'js',
+              code: `// app 생성 직후 추가\napp.use((req, res, next) => {\n  res.setHeader('X-Frame-Options', 'DENY');\n  res.setHeader('Content-Security-Policy', "default-src 'self'");\n  res.setHeader('X-Content-Type-Options', 'nosniff');\n  res.setHeader('Referrer-Policy', 'no-referrer');\n  next();\n});` },
+            { label: '정적 호스팅 (Netlify/Cloudflare) — public/_headers', lang: 'text',
+              code: `/*\n  X-Frame-Options: DENY\n  Content-Security-Policy: default-src 'self'\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: no-referrer` },
+            { label: 'Nginx — server { } 블록', lang: 'nginx',
+              code: `add_header X-Frame-Options "DENY" always;\nadd_header Content-Security-Policy "default-src 'self'" always;\nadd_header X-Content-Type-Options "nosniff" always;\nadd_header Referrer-Policy "no-referrer" always;` },
+          ] : null;
           return (
-            <div className="bg-[#e9f7f5] rounded-2xl border border-[#a6f0ea] p-6 space-y-2">
+            <div className="bg-[#e9f7f5] rounded-2xl border border-[#a6f0ea] p-6 space-y-3">
               <h4 className="font-bold text-[16px] text-[#00504d] flex items-center gap-2">
                 <span className="material-symbols-outlined text-[18px]">settings_suggest</span>
                 설정 권고 — 소스 코드 수정 불필요
               </h4>
               <p className="text-[13.5px] text-[#3f6f6b]">
-                이 항목은 서버/프록시/배포 <strong>설정</strong>으로 해결합니다(코드 변경 아님). 아래 설정을 적용하세요:
+                이 항목은 서버/프록시/배포 <strong>설정</strong>으로 해결합니다. 쓰는 스택에 맞는 걸 복붙하세요.
+                {headerSnippets && ' (소스 레포도 함께 올리면 우리가 이 수정을 자동 커밋해 드립니다.)'}
               </p>
-              <pre className="rounded-lg bg-[#181c1c] text-[#a5efe9] p-3 text-[12.5px] font-code overflow-x-auto whitespace-pre-wrap">{vuln.codeSnippet.afterCode}</pre>
+              {headerSnippets ? (
+                <div className="space-y-3">
+                  {headerSnippets.map((s) => (
+                    <div key={s.label}>
+                      <div className="text-[12px] font-bold text-[#00504d] mb-1">{s.label}</div>
+                      <pre className="rounded-lg bg-[#181c1c] text-[#a5efe9] p-3 text-[12.5px] font-code overflow-x-auto whitespace-pre-wrap">{s.code}</pre>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <pre className="rounded-lg bg-[#181c1c] text-[#a5efe9] p-3 text-[12.5px] font-code overflow-x-auto whitespace-pre-wrap">{vuln.codeSnippet.afterCode}</pre>
+              )}
             </div>
           );
         }
