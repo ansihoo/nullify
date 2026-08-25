@@ -109,12 +109,6 @@ export const ScanningView: React.FC<ScanningViewProps> = ({ repoUrl, onScanCompl
             <p className="text-[14px] text-[#6f7978]">
               실제로 터지는 것만 골라내는 중 — 잠시만요.
             </p>
-            <button
-              onClick={onScanComplete}
-              className="text-[12px] text-[#005652] hover:underline font-medium"
-            >
-              결과 즉시 확인하기 →
-            </button>
           </div>
 
         </div>
