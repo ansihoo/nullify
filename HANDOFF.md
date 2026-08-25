@@ -84,7 +84,9 @@
 - 사용자는 "문서화는 아직 시간 많아 나중" 입장 → 당분간 배포/기능 계속.
 
 ## 10. 다음 후보 (사용자가 고르게)
-- ✅ 임의앱 대응(후보 자동발견) — discover.py 완료(2026-08-25). ✅ IDOR 임의경로 일반화(enumerate_test) 완료. ✅ 크롤 깊이 env 튜닝. 남은 후속: 폼 **POST** 파라미터 실검증(현재 검증기 전부 GET 전용 — POST 지원하려면 검증기 10종 손봐야, 큰 작업), 제네릭 IDOR 닫힌루프(인증 컨텍스트 주입 방식 설계 필요).
+- ✅ 임의앱 대응(후보 자동발견) — discover.py 완료(2026-08-25). ✅ IDOR 임의경로 일반화(enumerate_test) 완료. ✅ 크롤 깊이 env 튜닝.
+- ✅ **폼 POST 파라미터 실검증 완결(2026-08-25)** — 동료(YoonSeongJune02)가 verify_sqli/xss/cmdi/traversal 에 `method="GET"|"POST"` 추가 + vuln_app do_POST(`_dispatch` 분리). 이어서 배선 완료: discover 가 `<form method=post>` 인식해 후보에 `method` 실어보냄(dedup 키에 method 포함), web.py scan_* 4종·SCANNERS·run_scan 이 method 관통, exploit_sqli(find_column_count/union_extract)도 method 받아 POST 탈취까지. GET 기본값이라 하위호환. selftest 가드: 공격재현 POST·discover 폼 POST 인식.
+- 남은 후속: 제네릭 IDOR 닫힌루프(인증 컨텍스트 주입 방식 설계 필요). redirect/ssrf 는 POST 미지원(검증 원리상 GET 위주라 우선순위 낮음).
 - UI 더 다듬기(결과카드·로딩·빈상태), Semgrep/Nuclei 실설치 데모(사용자), OAuth 레포연결(구조만),
   알림 채널 확장, 또는 문서화 전환.
 - 지금까지 "순수 코드로 리스크 없이 배포 근접"은 거의 소진. 남은 큰 건 외부 서비스 실연동(사용자 계정·키 필요).
