@@ -11,11 +11,19 @@
   - 그 외 공개 대상 → 거부. 실제 배포에선 '소유권 증명'(DNS TXT 챌린지 등)을 요구해야 한다.
     (동의 체크박스만으론 부족 — 남의 것을 '내 것'이라 거짓 체크할 수 있으니까)
 """
+import os
 import ipaddress
 import urllib.parse
 
 # 운영자가 소유/스코프를 확인한 공개 대상. 예: {"staging.myapp.com"}
-ALLOWLIST = set()
+# 코드 수정 없이 자기 소유 도메인만 열도록 환경변수로도 받는다(콤마 구분).
+#   예)  NULLIFY_ALLOWLIST=case-intake-pro.lovable.app,staging.myapp.com
+# ※ 반드시 '본인이 소유/스코프를 가진' 대상만. 남의 사이트를 넣으면 불법 스캔이 된다.
+ALLOWLIST = set(
+    h.strip().lower()
+    for h in os.environ.get("NULLIFY_ALLOWLIST", "").split(",")
+    if h.strip()
+)
 
 
 def _host(target):
