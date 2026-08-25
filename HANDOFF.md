@@ -11,6 +11,28 @@
 ## 0.5. ⭐ 최신 상태 (2026-08-26) — 새 세션은 여기부터 (아래 원본은 초기 백엔드 맥락)
 프로젝트가 **이름 VibeShield**(구 Nullify)로 바뀌었고, **React 프론트 + LLM 챗 + 자동수정**까지 붙었다.
 
+**⚡ 2026-08-26 갱신 — 재검증 배선 수정 + 킬러데모 진단 (커밋 1424e9e, 협업 종료: 이제 단독 개발):**
+- **재검증이 시크릿(SAST) 죽음을 못 잡던 배선 결함 수정.** 원인: ①프론트가 재검증 target 으로
+  표시용 합성문자열 `"url  +  repo"` 를 넘겨 `authorized:False` 크래시 ②재검증이 DAST(/api/rescan)
+  전용이라 소스취약점(시크릿) 죽음 확인 불가 ③소스 재검증용 백엔드 경로 부재.
+- **수정**: (백엔드) `/api/scan_source` 가 source=URL 이면 매 호출 최신 clone 후 SAST → GitHub 최신
+  반영. (프론트 App.tsx) 원본 url/repo 를 state·세션에 보존(rawUrl/rawRepo), handleRescan 이
+  repo→scanSource(SAST)·url→rescanTarget(DAST) 분기 + before/after 차분으로 사라진 취약점을
+  resolved+`receipt.afterResponse.vulnerable=false`(VerificationView '증명완료' 계약)로 표시.
+- **VerificationView: 수동 '지금 재검증' 버튼 추가.** 원래 트리거가 auto-rescan useEffect 뿐인데
+  `lastScan!==0` 게이트라 첫 재검증이 영영 안 뜨던 버그 발견 → 수동 버튼(24h 쿨다운은 자동 전용이라
+  수동엔 미적용, isRetesting 만 막음).
+- **검증**: 백엔드 로컬브랜치 before secret 1→after 0, URL-clone 최신 반영 확인. 브라우저에서
+  완전체 스캔(높음1 시크릿 `/assets/index-*.js` DAST + 중간3 헤더) → 수동 재검증 크래시 없이
+  `scan_source`+`rescan` 양경로 200, 4건 정확히 alive 유지(거짓 죽음 없음). tsc 통과.
+- **킬러데모 병목 = push 권한 403.** `ansihoo` 는 팀원레포 `smartharry1014/case-intake-pro-vuln-target`
+  에 push 불가(collaborator 아님). 라이브 죽음증명은 **collaborator 추가 + Vercel auto-deploy 확인**
+  필요(사용자↔팀원 조율). 배선은 준비됨 — push 되면 재배포 후 재검증에서 CONFIRMED→FALSE_POSITIVE.
+- **노출키는 `AKIAIOSFODNN7EXAMPLE` = AWS 문서용 예제키(실자격증명 아님)** → rotate 불필요, 데모 안전.
+- 참고: DAST 가 discover 크롤로 배포 번들 `/assets/index-*.js` 에서 시크릿을 CONFIRMED 로 잡음
+  (SAST 소스 `lovable-error-reporting.ts:29` 와 별개 경로). 시크릿 죽음은 DAST(재배포)·SAST(push)
+  양쪽에서 확인 가능.
+
 **실행법 (두 서버):**
 - 백엔드: `cd C:\Users\ansih\nullify && python web.py` → :8000 (과녁 :8009 자동)
 - 프론트: `cd C:\Users\ansih\nullify\unknown-security-scanner && npm run dev` → :3000
