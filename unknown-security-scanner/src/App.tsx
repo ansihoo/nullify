@@ -225,9 +225,10 @@ export function App() {
             fixSource: fix.fixSource, recommendation: fix.recommendation }
         : { error: fix.error, needsReview: fix.needsReview, needsRepo: fix.needsRepo,
             detectionOnly: fix.detectionOnly, reason: fix.reason };
-      // 설정 권고(recommendation)도 '해결'로 본다(소스 수정 불필요). 코드 PR 실패는 상태 유지.
-      const resolved = fix.ok;
-      const label = fix.recommendation ? '수정 완료 (설정 권고)'
+      // 권고(recommendation)는 '해결'이 아니다 — 적용·재검증이 안 됐으므로 증명 완료로 처리하면
+      // 안 된다(원칙: 증명 = 재검증으로 죽음 확인). 실제 수정 커밋이 생성된 경우만 resolved.
+      const resolved = fix.ok && !fix.recommendation;
+      const label = fix.recommendation ? '권고 제공됨 (적용 후 재검증 필요)'
                   : fix.ok ? '수정 완료 (git 커밋 생성됨)' : vuln.statusText;
       setVulnerabilities((prev) =>
         prev.map((v) =>

@@ -334,7 +334,7 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
                 onClick={() => onNavigateToFix(selectedVuln)}
                 className="w-full bg-[#005652] text-white py-3 px-4 rounded-lg font-bold text-[15px] hover:bg-[#1f6f6b] active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer"
               >
-                <span>코드 적용하기</span>
+                <span>다음: 수정</span>
                 <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
               </button>
             </>

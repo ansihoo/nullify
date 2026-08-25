@@ -157,12 +157,19 @@ export const VerificationView: React.FC<VerificationViewProps> = ({
                 <span className="w-2.5 h-2.5 bg-[#005652] rounded-full"></span>
                 해결된 취약점 ({resolvedVulns.length})
               </h4>
-              <span className="text-xs text-[#005652] font-semibold">
-                증명 영수증 발급됨
-              </span>
+              {resolvedVulns.length > 0 && (
+                <span className="text-xs text-[#005652] font-semibold">
+                  증명 영수증 발급됨
+                </span>
+              )}
             </div>
 
             <div className="space-y-3">
+              {resolvedVulns.length === 0 && (
+                <div className="text-[13px] text-[#8a938f] bg-[#f1f4f3] border border-[#e0e3e2] rounded-xl p-4">
+                  아직 재검증으로 소멸이 확인된 항목이 없습니다. 수정을 적용한 뒤 재검증하면 여기에 영수증이 발급됩니다.
+                </div>
+              )}
               {resolvedVulns.map((vuln) => (
                 <div
                   key={vuln.id}
@@ -261,26 +268,43 @@ export const VerificationView: React.FC<VerificationViewProps> = ({
               </span>
             </div>
 
-            <div className="space-y-3 text-[13.5px] text-[#3f4948] leading-relaxed">
-              <p>
-                <strong>VibeShield 보안 검증기:</strong> 백엔드 실시간 DAST 엔진이 패치된 코드베이스에 대하여 동일한 공격 페이로드를 재전송한 결과, IDOR 및 SQLi 엔드포인트의 취약점이 완전히 소멸되었음을 확인하였습니다.
-              </p>
-              
-              <div className="bg-[#f1f4f3] p-3 rounded-xl border border-[#e0e3e2] space-y-1.5">
-                <div className="flex justify-between text-xs text-[#181c1c]">
-                  <span>보안 상태 점수:</span>
-                  <strong className="text-[#005652] font-bold">92 / 100 (안전)</strong>
+            {(() => {
+              // 실제 스캔 결과 기반 리포트(하드코딩 제거).
+              const totalV = vulnerabilities.length;
+              const doneV = resolvedVulns.length;
+              const openV = unresolvedVulns.length;
+              const score = totalV > 0 ? Math.round((doneV / totalV) * 100) : 0;
+              const resolvedKinds = Array.from(new Set(resolvedVulns.map((v) => v.type)));
+              const allClear = totalV > 0 && openV === 0;
+              const summary = totalV === 0
+                ? '아직 스캔 결과가 없습니다.'
+                : doneV === 0
+                ? `전체 ${totalV}건 중 재검증으로 소멸이 확인된 항목은 아직 없습니다. 수정을 적용한 뒤 재검증하세요.`
+                : `전체 ${totalV}건 중 ${doneV}건이 재현 실패(소멸 확인)${openV > 0 ? `, ${openV}건 미해결` : ''}. 소멸 확인: ${resolvedKinds.join(', ')}.`;
+              const scoreLabel = allClear ? '안전' : doneV > 0 ? '개선 중' : '조치 필요';
+              return (
+              <>
+                <div className="space-y-3 text-[13.5px] text-[#3f4948] leading-relaxed">
+                  <p><strong>VibeShield 재검증:</strong> {summary}</p>
+                  <div className="bg-[#f1f4f3] p-3 rounded-xl border border-[#e0e3e2] space-y-1.5">
+                    <div className="flex justify-between text-xs text-[#181c1c]">
+                      <span>해결 진행도:</span>
+                      <strong className="text-[#005652] font-bold">{score} / 100 ({scoreLabel})</strong>
+                    </div>
+                    <div className="w-full bg-[#e0e3e2] h-2 rounded-full overflow-hidden">
+                      <div className="bg-[#005652] h-full rounded-full" style={{ width: `${score}%` }}></div>
+                    </div>
+                  </div>
                 </div>
-                <div className="w-full bg-[#e0e3e2] h-2 rounded-full overflow-hidden">
-                  <div className="bg-[#005652] h-full rounded-full" style={{ width: '92%' }}></div>
+                <div className="pt-2 border-t border-[#eceeed] text-[12px] text-[#6f7978] flex items-center justify-between">
+                  <span>재검증 항목: {doneV}/{totalV}</span>
+                  <span className={`font-code ${allClear ? 'text-[#005652]' : 'text-[#a5680b]'}`}>
+                    {allClear ? '전부 소멸 확인' : `미해결 ${openV}건`}
+                  </span>
                 </div>
-              </div>
-            </div>
-
-            <div className="pt-2 border-t border-[#eceeed] text-[12px] text-[#6f7978] flex items-center justify-between">
-              <span>최종 검증: 방금 전</span>
-              <span className="font-code text-[#005652]">CI/CD PASS</span>
-            </div>
+              </>
+              );
+            })()}
           </div>
         </div>
 
