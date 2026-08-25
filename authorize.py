@@ -19,7 +19,11 @@ import urllib.parse
 # 코드 수정 없이 자기 소유 도메인만 열도록 환경변수로도 받는다(콤마 구분).
 #   예)  NULLIFY_ALLOWLIST=case-intake-pro.lovable.app,staging.myapp.com
 # ※ 반드시 '본인이 소유/스코프를 가진' 대상만. 남의 사이트를 넣으면 불법 스캔이 된다.
-ALLOWLIST = set(
+# 기본 승인 목록 — 소유자가 확인한 대상(예: 내가 만든 테스트 사이트).
+_DEFAULT_ALLOW = {
+    "case-intake-pro.lovable.app",   # 소유자 본인 소유 테스트 사이트
+}
+ALLOWLIST = _DEFAULT_ALLOW | set(
     h.strip().lower()
     for h in os.environ.get("NULLIFY_ALLOWLIST", "").split(",")
     if h.strip()
