@@ -91,7 +91,8 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
           )}
         </h2>
 
-        {/* 진행 단계 스텝퍼 */}
+        {/* 진행 단계 스텝퍼 — 취약점 0건(clear) 화면에선 넘어갈 단계가 없어 숨김 */}
+        {currentTab !== 'clear' && (
         <nav className="hidden sm:flex items-center gap-1">
           {steps.map((s, i) => {
             const isActive = i === activeIdx;
@@ -118,6 +119,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
             );
           })}
         </nav>
+        )}
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
