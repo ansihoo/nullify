@@ -21,6 +21,11 @@
   (= 발견은 재현율/recall 을 챙기고, 정밀도/precision 은 검증기가 책임진다.)
 
 stdlib 만 사용: urllib(요청/URL), html.parser(HTML 파싱). BeautifulSoup 같은 외부 의존 없음.
+
+2026-08-25: 폼의 method(GET/POST) 를 인식해 후보에 담는다.
+  form 튜플 순서 = (action, method, [input names]).
+  후보 dict 에 "method" 필드 포함, scanner 라벨에 방식 표시(discover(form/get|post)).
+  ※ 두 작업자가 같은 기능을 동시에 구현 → 이 버전으로 통일(병합).
 """
 import urllib.request
 import urllib.parse
@@ -254,7 +259,7 @@ def probe(base, timeout=4):
 
 
 def discover(base, max_pages=25, max_depth=2, timeout=5):
-    """크롤 + 탐침을 합쳐 (kind, path, param) 중복 제거한 후보 리스트를 돌려준다.
+    """크롤 + 탐침을 합쳐 (kind, path, param, method) 중복 제거한 후보 리스트를 돌려준다.
     깊이·페이지 수는 환경변수로도 조정 가능(코드 수정 없이 튜닝):
       NULLIFY_CRAWL_DEPTH, NULLIFY_CRAWL_PAGES."""
     import os
@@ -276,4 +281,5 @@ if __name__ == "__main__":
     cands = discover(tgt)
     print("대상:", tgt, "| 발견 후보:", len(cands))
     for c in sorted(cands, key=lambda x: (x["path"], x["kind"])):
-        print("  %-10s %-16s param=%-8s [%s]" % (c["kind"], c["path"], c["param"], c["scanner"]))
+        print("  %-10s %-16s param=%-8s method=%-4s [%s]" % (
+            c["kind"], c["path"], c["param"], c.get("method", "GET"), c["scanner"]))

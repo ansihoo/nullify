@@ -5,6 +5,11 @@
   - Location 헤더가 우리가 준 외부 도메인을 가리키면 → CONFIRMED
   - 홈('/')이나 같은 사이트로 가면                → FALSE_POSITIVE
 리다이렉트를 '따라가지 않고' Location 헤더만 본다.
+
+2026-08-25: verify 에 method="GET"|"POST" 인자 추가.
+GET 은 기존과 동일(쿼리스트링). POST 는 같은 payload 를 폼 바디로 보낸다.
+★ _NoRedirect opener(리다이렉트 미추적)는 POST 에서도 그대로 유지 —
+  이게 SSRF 와 오픈리다이렉트를 가르는 회귀 가드의 핵심이라 절대 안 건드림.
 """
 import urllib.request
 import urllib.parse
@@ -21,14 +26,35 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 _OPENER = urllib.request.build_opener(_NoRedirect)
 
 
-def verify(base_url, param="next"):
-    url = base_url + "?" + urllib.parse.urlencode({param: EVIL})
+def verify(base_url, param="next", method="GET"):
+    """
+    (원본)
+    def verify(base_url, param="next"):
+        url = base_url + "?" + urllib.parse.urlencode({param: EVIL})
+        try:
+            r = _OPENER.open(url, timeout=5)
+            status, loc = r.status, r.headers.get("Location", "")
+        except urllib.error.HTTPError as e:
+            status, loc = e.code, e.headers.get("Location", "")
+        ev = {"payload": EVIL, "status": status, "location": loc}
+    """
+    # (변경) method="GET"|"POST" 인자 추가. GET 은 기존과 동일(쿼리스트링).
+    #        POST 는 같은 payload 를 폼 바디로 보낸다. opener(_OPENER)는 그대로 —
+    #        리다이렉트 미추적 동작을 GET/POST 양쪽에서 동일하게 유지한다.
+    if method.upper() == "POST":
+        data = urllib.parse.urlencode({param: EVIL}).encode("utf-8")
+        req = urllib.request.Request(
+            base_url, data=data, method="POST",
+            headers={"Content-Type": "application/x-www-form-urlencoded"})
+    else:
+        url = base_url + "?" + urllib.parse.urlencode({param: EVIL})
+        req = urllib.request.Request(url, method="GET")
     try:
-        r = _OPENER.open(url, timeout=5)
+        r = _OPENER.open(req, timeout=5)
         status, loc = r.status, r.headers.get("Location", "")
     except urllib.error.HTTPError as e:                 # 302 는 여기로 온다
         status, loc = e.code, e.headers.get("Location", "")
-    ev = {"payload": EVIL, "status": status, "location": loc}
+    ev = {"method": method, "payload": EVIL, "status": status, "location": loc}
     if "evil.example.com" in loc:
         return "CONFIRMED", "외부 도메인으로 리다이렉트됨 → 오픈 리다이렉트", ev
     return "FALSE_POSITIVE", "외부 도메인 리다이렉트가 차단됨", ev
