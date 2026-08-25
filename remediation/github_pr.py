@@ -229,7 +229,54 @@ def create_fix(repo, kind, file_rel=None):
     title = spec["title"] if spec else "fix(security): " + kind
     path = os.path.join(repo, file_rel)
     if not os.path.exists(path):
-        return {"kind": kind, "error": "대상 파일 없음: %s" % file_rel}
+        # 기본 파일(app.py)이 없으면 레포에서 소스 파일을 자동 탐색해 LLM 수정 시도.
+        _SRC_EXTS = {".py", ".js", ".jsx", ".ts", ".tsx", ".java", ".go", ".rb", ".php"}
+        found = None
+        for root, dirs, files in os.walk(repo):
+            dirs[:] = [d for d in dirs if d not in ("node_modules", ".git", "dist", "build", "__pycache__")]
+            for fn in files:
+                _, ext = os.path.splitext(fn)
+                if ext.lower() in _SRC_EXTS:
+                    candidate = os.path.join(root, fn)
+                    # 파일 내용을 간단히 보고 취약 패턴이 있으면 우선 선택
+                    try:
+                        with open(candidate, encoding="utf-8", errors="replace") as cf:
+                            content = cf.read(10000)
+                        if found is None:
+                            found = (candidate, content)
+                        # kind 에 맞는 힌트가 있으면 이걸로 확정
+                        hints = {"sqli": ["execute", "query", "sql"], "xss": ["innerHTML", "dangerouslySetInnerHTML", "v-html"],
+                                 "secret": ["API_KEY", "SECRET", "PASSWORD", "AKIA"], "headers": ["helmet", "Content-Security"],
+                                 "traversal": ["readFile", "open(", "path.join"], "cmdi": ["exec(", "spawn(", "system("]}
+                        for h in hints.get(kind, []):
+                            if h.lower() in content.lower():
+                                found = (candidate, content)
+                                break
+                    except Exception:
+                        pass
+        if not found:
+            return {"kind": kind, "error": "대상 파일 없음: %s — 레포에 소스 파일을 찾지 못함" % file_rel}
+        path, src_content = found
+        file_rel = os.path.relpath(path, repo)
+        # 카탈로그 매칭 건너뛰고 바로 LLM 수정 시도
+        patched, note, tag = fixgen.generate_fix(src_content, kind, file_rel)
+        if not patched:
+            _git(repo, "checkout", "-q", "main")
+            return {"kind": kind, "needs_review": True, "reason": note}
+        _git(repo, "checkout", "-q", "-B", branch, "main")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(patched)
+        _git(repo, "add", file_rel)
+        _commit(repo, title)
+        commit = _git(repo, "rev-parse", "--short", "HEAD").strip()
+        base = "main"
+        diff = _git(repo, "show", "--no-color", "HEAD")
+        _git(repo, "checkout", "-q", base)
+        gh = ("git push -u origin %s\n"
+              "gh pr create --base %s --head %s --title \"%s\" --body \"Nullify LLM 자동 수정\"" 
+              % (branch, base, branch, title))
+        return {"kind": kind, "ok": True, "branch": branch, "commit": commit,
+                "title": title, "diff": diff, "fix_source": tag, "gh": gh}
 
     _git(repo, "checkout", "-q", "-B", branch, "main")
     with open(path, encoding="utf-8") as f:

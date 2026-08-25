@@ -517,7 +517,7 @@ export async function generateFix(v: Vulnerability): Promise<FixResult> {
     // 카탈로그가 이 레포 구조와 안 맞으면(대상 파일 없음 등) 암호 같은 에러 대신 정직한 안내.
     if (d.error && /대상 파일 없음|파일/.test(d.error)) {
       return { ok: false, needsReview: true,
-               reason: '이 레포엔 자동 수정 카탈로그가 매칭되는 파일이 없습니다. 검증된 카탈로그 수정은 데모/알려진 구조에서 동작하고, 임의 레포는 LLM 수정(ANTHROPIC_API_KEY 설정) 또는 수동 수정이 필요합니다. — 동적으로 취약점은 확인됐으니(위 근거) 해당 위치를 직접 패치하세요.' };
+               reason: '이 레포엔 자동 수정 카탈로그가 매칭되는 파일이 없습니다. 검증된 카탈로그 수정은 데모/알려진 구조에서 동작하고, 임의 레포는 LLM 수정(GEMINI_API_KEY 설정) 또는 수동 수정이 필요합니다. — 동적으로 취약점은 확인됐으니(위 근거) 해당 위치를 직접 패치하세요.' };
     }
     if (d.error) return { ok: false, error: d.error };
     if (d.needs_review) return { ok: false, needsReview: true, reason: d.reason };
