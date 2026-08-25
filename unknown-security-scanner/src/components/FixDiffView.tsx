@@ -165,7 +165,7 @@ ${vuln.codeSnippet.afterCode.split('\n').map((l) => `+ ${l}`).join('\n')}
                   <span className="material-symbols-outlined text-[14px]">
                     {copiedPatch ? 'check' : 'content_copy'}
                   </span>
-                  {copiedPatch ? '복사됨' : '패치 복사'}
+                  {copiedPatch ? '복사됨' : ''}
                 </button>
               </div>
               <pre className="p-4 text-[13px] font-code overflow-x-auto text-[#a5efe9] leading-relaxed bg-[#162220]">

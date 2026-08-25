@@ -94,8 +94,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
       </div>
 
-      <div className="px-4 py-3 border-t border-[#e0e3e2] text-[11px] text-[#8a938f]">
-        결정론 검증 보안 스캐너
+      {/* 좌측 하단 프로필 */}
+      <div className="px-3 py-3 border-t border-[#e0e3e2] flex items-center gap-3">
+        <div className="w-9 h-9 rounded-full bg-[#1f6f6b] text-white flex items-center justify-center shrink-0 shadow-sm">
+          <span className="material-symbols-outlined text-[20px]">shield_person</span>
+        </div>
+        <div className="min-w-0">
+          <div className="text-[13px] font-semibold text-[#181c1c] truncate">보안 관리자</div>
+          <div className="text-[11px] text-[#8a938f] truncate">VibeShield</div>
+        </div>
       </div>
     </aside>
   );
