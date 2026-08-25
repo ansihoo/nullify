@@ -33,14 +33,14 @@ from verifiers.verify_secret import verify as verify_secret
 from verifiers.verify_component import verify as verify_component
 from verifiers.exploit_sqli import find_column_count, union_extract
 from discovery.ingest import load_candidates
-from authorize import authorize
+from infra.authorize import authorize
 from remediation.fixes import FIXES
 import discovery.scanner as scanner
 import discovery.sast as sast
 import combine
 import remediation.github_pr as github_pr
-import store
-import notify
+import infra.store as store
+import infra.notify as notify
 from collections import deque
 import os
 import sys
