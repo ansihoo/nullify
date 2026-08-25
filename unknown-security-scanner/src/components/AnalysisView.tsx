@@ -269,8 +269,13 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
 
       {/* Right Column: AI Guide Panel */}
       <div className="w-full xl:w-[440px] shrink-0">
+        {vulnerabilities.length === 0 ? (
+        <div className="bg-white rounded-xl p-6 border border-[#bec9c7] shadow-sm text-center text-[13px] text-[#8a938f] sticky top-24">
+          표시할 취약점이 없습니다. 발견된 항목을 선택하면 여기에 상세가 표시됩니다.
+        </div>
+        ) : (
         <div className="bg-white rounded-xl p-6 border border-[#bec9c7] shadow-sm space-y-5 sticky top-24">
-          
+
           {/* AI Guide Header */}
           <div className="flex items-center justify-between border-b border-[#eceeed] pb-3">
             <div className="flex items-center gap-2">
@@ -350,6 +355,7 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
           )}
 
         </div>
+        )}
       </div>
 
       {/* Floating Bottom AI Chat Bar */}

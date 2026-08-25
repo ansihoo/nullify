@@ -46,9 +46,24 @@ ${vuln.codeSnippet.afterCode.split('\n').map((l) => `+ ${l}`).join('\n')}
     setTimeout(() => setCopiedPatch(false), 2000);
   };
 
+  // 취약점이 하나도 없으면(스캔 0건) 전/후 비교를 그릴 게 없음 → 빈 상태.
+  if (allVulnerabilities.length === 0) {
+    return (
+      <div id="fix-diff-view-container" className="p-6 max-w-3xl mx-auto">
+        <div className="bg-white border border-[#bec9c7] rounded-2xl p-10 text-center space-y-3">
+          <span className="material-symbols-outlined text-[40px] text-[#8ad3ce]">check_circle</span>
+          <h2 className="text-[20px] font-bold text-[#181c1c]">수정할 취약점이 없습니다</h2>
+          <p className="text-[14px] text-[#6f7978] leading-relaxed">
+            이번 스캔에서 재현되는 취약점을 찾지 못했습니다. 수정 전/후 비교는 발견된 취약점이 있을 때만 표시됩니다.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div id="fix-diff-view-container" className="p-6 max-w-7xl mx-auto space-y-6 pb-24">
-      
+
       {/* Header with Title and Subtitle */}
       <div>
         <div className="flex flex-wrap items-center justify-between gap-4 mb-2">
