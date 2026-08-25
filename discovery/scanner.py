@@ -17,7 +17,9 @@ import subprocess
 
 from discovery.ingest import load_candidates
 
-SAMPLE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scanner_report.jsonl")
+# 샘플 리포트는 프로젝트 루트에 있음. 이 파일은 discovery/ 안이라 상위로 한 단계 올라감.
+SAMPLE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                      "scanner_report.jsonl")
 
 
 def nuclei_available():
@@ -54,7 +56,7 @@ def candidates_for(target, prefer_discover=False):
     # ② 외부 스캐너 없이도 임의 앱에서 후보를 찾는다(내장 discovery).
     if prefer_discover or os.environ.get("NULLIFY_DISCOVER") == "1":
         try:
-            import discover
+            from discovery import discover
             cands = discover.discover(target)
             if cands:
                 return cands, "discover(내장 크롤러)"
