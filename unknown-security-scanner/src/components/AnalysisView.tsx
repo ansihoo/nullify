@@ -162,11 +162,13 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            onNavigateToFix(vuln);
+                            // 탐지 전용: fix 페이지로 안 가고 우측 패널에 상세만 표시.
+                            if (canFix) onNavigateToFix(vuln);
+                            else onSelectVuln(vuln);
                           }}
                           className="text-[#005652] font-semibold hover:underline flex items-center gap-1"
                         >
-                          <span className="material-symbols-outlined text-[15px]">code</span>
+                          <span className="material-symbols-outlined text-[15px]">{canFix ? 'code' : 'visibility'}</span>
                           {canFix ? '수정 코드 보기' : '상세 보기'}
                         </button>
                         {vuln.requiresIntentConfirmation && (
@@ -288,58 +290,60 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
             </p>
           </div>
 
-          {/* Fix Direction */}
+          {/* 권고/수정 방향 — 탐지 전용이면 '권고'로, 아니면 '수정 방향' */}
           <div className="space-y-1.5 bg-[#f1f4f3] p-3.5 rounded-lg border border-[#e0e3e2]">
             <h5 className="text-[13px] font-bold text-[#005652] flex items-center gap-1.5">
               <span className="material-symbols-outlined text-[15px]">tips_and_updates</span>
-              수정 방향
+              {canFix ? '수정 방향' : '권고'}
             </h5>
             <p className="text-[13px] text-[#3f4948] leading-relaxed">
               {selectedVuln.aiGuide.fixDirection}
             </p>
           </div>
 
-          {/* Interactive Code Block */}
-          {selectedVuln.codeSnippet && (
-            <div className="rounded-lg overflow-hidden border border-[#2b3131] bg-[#181c1c] text-white">
-              <div className="bg-[#242929] px-4 py-2 flex items-center justify-between text-xs text-[#a5efe9] border-b border-[#333a39]">
-                <span className="font-code font-medium">
-                  {selectedVuln.codeSnippet.fileName}
-                </span>
-                <button
-                  id="btn-copy-code-guide"
-                  onClick={handleCopyCode}
-                  className="text-xs text-[#bec9c7] hover:text-white flex items-center gap-1 transition-colors"
-                >
-                  <span className="material-symbols-outlined text-[14px]">
-                    {copiedCode ? 'check' : 'content_copy'}
-                  </span>
-                  {copiedCode ? '복사됨' : '복사'}
-                </button>
-              </div>
-
-              <div className="p-3 font-code text-[12.5px] leading-relaxed overflow-x-auto space-y-1">
-                <div className="text-[#ffb4ab] bg-[#ba1a1a]/20 px-2 py-1 rounded">
-                  <span className="text-[#ffdad6]/60 select-none mr-2">1</span>
-                  {selectedVuln.codeSnippet.beforeCode}
+          {/* 코드 수정 관련은 '수정 가능(canFix)'일 때만 노출 — 탐지 전용은 코드 얘기 안 함 */}
+          {canFix ? (
+            <>
+              {selectedVuln.codeSnippet && (
+                <div className="rounded-lg overflow-hidden border border-[#2b3131] bg-[#181c1c] text-white">
+                  <div className="bg-[#242929] px-4 py-2 flex items-center justify-between text-xs text-[#a5efe9] border-b border-[#333a39]">
+                    <span className="font-code font-medium">{selectedVuln.codeSnippet.fileName}</span>
+                    <button
+                      id="btn-copy-code-guide"
+                      onClick={handleCopyCode}
+                      className="text-xs text-[#bec9c7] hover:text-white flex items-center gap-1 transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[14px]">{copiedCode ? 'check' : 'content_copy'}</span>
+                      {copiedCode ? '복사됨' : '복사'}
+                    </button>
+                  </div>
+                  <div className="p-3 font-code text-[12.5px] leading-relaxed overflow-x-auto space-y-1">
+                    <div className="text-[#ffb4ab] bg-[#ba1a1a]/20 px-2 py-1 rounded">
+                      <span className="text-[#ffdad6]/60 select-none mr-2">1</span>
+                      {selectedVuln.codeSnippet.beforeCode}
+                    </div>
+                    <div className="text-[#a5efe9] bg-[#005652]/40 px-2 py-1 rounded">
+                      <span className="text-[#a5efe9]/60 select-none mr-2">2</span>
+                      {selectedVuln.codeSnippet.afterCode}
+                    </div>
+                  </div>
                 </div>
-                <div className="text-[#a5efe9] bg-[#005652]/40 px-2 py-1 rounded">
-                  <span className="text-[#a5efe9]/60 select-none mr-2">2</span>
-                  {selectedVuln.codeSnippet.afterCode}
-                </div>
-              </div>
+              )}
+              <button
+                id="btn-apply-code-to-fix"
+                onClick={() => onNavigateToFix(selectedVuln)}
+                className="w-full bg-[#005652] text-white py-3 px-4 rounded-lg font-bold text-[15px] hover:bg-[#1f6f6b] active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+              >
+                <span>코드 적용하기</span>
+                <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+              </button>
+            </>
+          ) : (
+            <div className="bg-[#eef4f3] border border-[#cfe0dd] rounded-lg p-3.5 text-[12.5px] text-[#3f5f5b] leading-relaxed">
+              <span className="material-symbols-outlined text-[15px] align-middle mr-1 text-[#1f6f6b]">travel_explore</span>
+              탐지 전용 — 발견까지만 제공합니다. 검증된 <strong>코드 수정·PR</strong>을 받으려면 상단에 <strong>GitHub 레포도 함께</strong> 올려 다시 스캔하세요.
             </div>
           )}
-
-          {/* Apply Code CTA Button */}
-          <button
-            id="btn-apply-code-to-fix"
-            onClick={() => onNavigateToFix(selectedVuln)}
-            className="w-full bg-[#005652] text-white py-3 px-4 rounded-lg font-bold text-[15px] hover:bg-[#1f6f6b] active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer"
-          >
-            <span>코드 적용하기</span>
-            <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
-          </button>
 
         </div>
       </div>

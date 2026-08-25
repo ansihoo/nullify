@@ -292,6 +292,7 @@ export function App() {
             onReconnect={() => setCurrentTab('landing')}
             unresolvedCount={unresolvedCount}
             resolvedCount={resolvedCount}
+            canFix={canFix}
           />
         )}
 

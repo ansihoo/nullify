@@ -7,6 +7,7 @@ interface SidebarProps {
   onReconnect: () => void;
   unresolvedCount?: number;
   resolvedCount?: number;
+  canFix?: boolean;   // 소스 레포 있음 → 수정/검증 탭 노출
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -16,6 +17,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onReconnect,
   unresolvedCount = 3,
   resolvedCount = 2,
+  canFix = false,
 }) => {
   return (
     <aside
@@ -97,7 +99,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </span>
         </button>
 
-        {/* Fix */}
+        {/* Fix — 탐지 전용(canFix=false)에선 숨김: 수정 스토리 자체가 없음 */}
+        {canFix && (
         <button
           id="nav-tab-fix"
           onClick={() => onSelectTab('fix')}
@@ -127,8 +130,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             PR 준비
           </span>
         </button>
+        )}
 
-        {/* Verification */}
+        {/* Verification — 수정→재검증 흐름이라 탐지 전용에선 숨김 */}
+        {canFix && (
         <button
           id="nav-tab-verify"
           onClick={() => onSelectTab('verify')}
@@ -158,6 +163,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {resolvedCount} 완료
           </span>
         </button>
+        )}
       </nav>
 
       {/* Footer Area with Reconnect Link and Profile */}
