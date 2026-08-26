@@ -357,7 +357,7 @@ export function App() {
         return {
           ...v,
           status: 'resolved',
-          statusText: '증명완료 (재검증으로 죽음 확인)',
+          statusText: '증명 완료 (재검증으로 재현 안 됨 확인)',
           receipt: { ...((v as any).receipt || {}), afterResponse: { vulnerable: false } },
         } as Vulnerability;
       });

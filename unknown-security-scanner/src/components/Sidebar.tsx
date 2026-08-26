@@ -92,9 +92,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </div>
                     <div className="flex items-center gap-2 text-[11px] text-[#8a938f]">
                       <span>{h.ts}</span>
-                      {h.crit > 0 && <span className="text-[#c0392b] font-semibold">진짜 {h.crit}</span>}
+                      {h.crit > 0 && <span className="text-[#c0392b] font-semibold">높음 {h.crit}</span>}
                       {h.ques > 0 && <span className="text-[#6a4bd0] font-semibold">질문 {h.ques}</span>}
-                      {h.warn > 0 && <span className="text-[#a5680b] font-semibold">경고 {h.warn}</span>}
+                      {h.warn > 0 && <span className="text-[#a5680b] font-semibold">중간 {h.warn}</span>}
                       {h.crit === 0 && h.ques === 0 && h.warn === 0 && <span>이슈 없음</span>}
                     </div>
                   </button>

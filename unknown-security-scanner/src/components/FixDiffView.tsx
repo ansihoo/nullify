@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import { Vulnerability } from '../types';
 
@@ -24,6 +24,13 @@ export const FixDiffView: React.FC<FixDiffViewProps> = ({
   const [agreedToGit, setAgreedToGit] = useState<boolean>(true);
   const [isPatchCreated, setIsPatchCreated] = useState<boolean>(vuln.status === 'resolved');
   const [copiedPatch, setCopiedPatch] = useState<boolean>(false);
+
+  // '모두 수정'/'패치 생성'은 App 상태(vuln.status)를 바꾼다 — 여기에 동기화해야 수정 후
+  // '다음: 검증' 버튼이 뜬다(안 그러면 수정 단계에서 다음으로 못 넘어감). 선택 취약점이
+  // 바뀔 때도 그 상태를 반영.
+  useEffect(() => {
+    setIsPatchCreated(vuln.status === 'resolved');
+  }, [vuln.id, vuln.status]);
 
   const handlePatchSubmit = () => {
     confetti({
@@ -206,7 +213,7 @@ ${vuln.codeSnippet.afterCode.split('\n').map((l) => `+ ${l}`).join('\n')}
         <div>
           <h4 className="font-bold text-[15px] text-[#1f4d49]">탐지 전용 모드 — 발견까지만 제공</h4>
           <p className="text-[13.5px] text-[#3f5f5b] mt-1">
-            사이트 URL만 받으면 "어디가 터지는지"까지만 알 수 있어요(소스가 없어 코드 수정 불가).
+            사이트 URL만 받으면 "어디가 취약한지"까지만 알 수 있어요(소스가 없어 코드 수정 불가).
             검증된 코드 수정과 PR을 받으려면 <strong>GitHub 레포도 함께</strong> 올려 다시 스캔하세요.
             {['headers','secret','component'].includes(((vuln as any)._raw?.kind)||'') &&
               ' (이 항목은 설정 계열이라, 위 "수정 제안"의 설정을 서버/프록시에 그대로 적용하면 됩니다.)'}
@@ -236,8 +243,8 @@ ${vuln.codeSnippet.afterCode.split('\n').map((l) => `+ ${l}`).join('\n')}
               onClick={onNavigateToVerify}
               className="w-full md:w-auto bg-[#005652] text-white px-8 py-3 rounded-xl font-bold text-[15px] hover:bg-[#1f6f6b] active:scale-95 transition-all flex items-center justify-center gap-2 shadow-md cursor-pointer"
             >
-              <span>재검증 화면으로 이동</span>
-              <span className="material-symbols-outlined text-[18px]">verified</span>
+              <span>다음: 검증</span>
+              <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
             </button>
           ) : (
             <>

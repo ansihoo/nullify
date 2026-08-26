@@ -34,7 +34,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onStartScan }) => {
             VibeShield
           </h1>
           <p className="text-[20px] sm:text-[22px] text-[#3f4948] font-normal leading-relaxed">
-            지금 당신 앱에서 진짜 터지는 것만 골라, 고치고, 증명합니다.
+            실제로 재현되는 취약점만 가려내고, 고치고, 재검증으로 증명합니다.
           </p>
         </div>
 
@@ -52,7 +52,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onStartScan }) => {
                 type="text"
                 value={inputUrl}
                 onChange={(e) => setInputUrl(e.target.value)}
-                placeholder="사이트 URL (실행 중인 앱을 찔러 탐지)"
+                placeholder="사이트 URL (실행 중인 앱 대상 탐지)"
                 className="flex-grow border-none focus:outline-none focus:ring-0 bg-transparent text-[15px] placeholder-[#bec9c7] text-[#181c1c] font-code px-1 py-1.5"
               />
             </div>

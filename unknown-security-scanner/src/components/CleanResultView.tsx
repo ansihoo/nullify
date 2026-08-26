@@ -27,7 +27,7 @@ export const CleanResultView: React.FC<CleanResultViewProps> = ({
           </h1>
           <p className="text-[15px] text-[#3f4948]">
             <span className="font-code text-[13px] bg-[#eceeed] text-[#545f72] px-2 py-0.5 rounded break-all">{target}</span>
-            {' '}에서 실제로 터지는 취약점을 찾지 못했습니다.
+            {' '}에서 실제로 재현되는 취약점을 찾지 못했습니다.
           </p>
         </div>
 

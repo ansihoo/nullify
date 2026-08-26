@@ -71,7 +71,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, s
               onChange={(e) => setNoiseFilter(e.target.value as AppSettings['noiseFilter'])}
               className="w-full bg-white border border-[#bec9c7] rounded-lg p-2.5 text-xs sm:text-sm focus:outline-none focus:border-[#005652]"
             >
-              <option value="strict">엄격 — 실제 터지는 것만 (걸러낸 오탐 숨김, 기본값)</option>
+              <option value="strict">엄격 — 재현되는 것만 (걸러낸 오탐 숨김, 기본값)</option>
               <option value="all">전체 — 걸러낸 오탐/노이즈도 함께 표시</option>
             </select>
           </div>

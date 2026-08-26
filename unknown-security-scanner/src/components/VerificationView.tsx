@@ -99,7 +99,7 @@ export const VerificationView: React.FC<VerificationViewProps> = ({
       {/* Header */}
       <div>
         <h2 className="text-[24px] sm:text-[28px] font-bold text-[#181c1c] tracking-tight">
-          재검증 — 다시 찔러 죽음 확인
+          재검증 — 패치 후 재현 여부 확인
         </h2>
         <p className="text-[14px] sm:text-[15px] text-[#3f4948]">
           패치 적용 후, 백엔드가 자동으로 반복 재스캔하며 취약점 재현 여부를 확인합니다.
@@ -121,7 +121,7 @@ export const VerificationView: React.FC<VerificationViewProps> = ({
           <div>
             <h3 className="text-[18px] sm:text-[20px] font-bold text-[#00201e] flex items-center gap-2">
               {allClear
-                ? '라이브 재현 → 이제 안 터짐 ✓'
+                ? '라이브 재검증 → 재현되지 않음 ✓'
                 : `재검증 진행 중 — ${doneV}/${totalV} 해결`}
             </h3>
             <p className="text-[13.5px] text-[#00504d] mt-0.5">

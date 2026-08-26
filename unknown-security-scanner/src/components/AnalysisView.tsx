@@ -69,7 +69,7 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
         <div>
           <div className="flex flex-wrap items-center gap-3 mb-1">
             <h2 className="text-[22px] sm:text-[24px] font-bold text-[#181c1c] tracking-tight">
-              지금 진짜 터지는 것만 — 위험도순
+              탐지된 취약점 — 위험도순
             </h2>
             <div className="flex items-center gap-1.5">
               <span className="text-[12px] font-bold bg-[#ffdad6] text-[#93000a] px-2.5 py-0.5 rounded-full">
@@ -221,7 +221,7 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
                 filter_list_off
               </span>
               <span className="font-bold text-[15px] text-[#181c1c]">
-                참고 (안 터짐/도달 불가) · {filteredNoise.length}건
+                참고 (재현 안 됨/도달 불가) · {filteredNoise.length}건
               </span>
             </div>
             <div className="flex items-center gap-2">

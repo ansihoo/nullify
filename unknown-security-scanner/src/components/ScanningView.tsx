@@ -107,7 +107,7 @@ export const ScanningView: React.FC<ScanningViewProps> = ({ repoUrl, onScanCompl
           {/* Contextual Bottom Text */}
           <div className="text-center space-y-2">
             <p className="text-[14px] text-[#6f7978]">
-              실제로 터지는 것만 골라내는 중 — 잠시만요.
+              실제로 재현되는 것만 가려내는 중 — 잠시만요.
             </p>
           </div>
 
