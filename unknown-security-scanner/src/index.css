@@ -81,7 +81,7 @@
 
 @keyframes loading-ring-anim {
   0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  100% { transform: rotate(-360deg); }
 }
 
 @keyframes pulse-dot {
@@ -119,3 +119,11 @@
   background: #bec9c7;
 }
 
+
+/* sync 아이콘(화살표 원형) 전용 반시계 회전 — Tailwind animate-spin(시계) 이 화살표
+   방향과 반대로 보여서, 화살표가 가리키는 방향으로 돌도록 역회전 클래스 제공. */
+@keyframes spin-ccw {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(-360deg); }
+}
+.animate-spin-ccw { animation: spin-ccw 1s linear infinite; }

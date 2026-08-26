@@ -86,7 +86,7 @@ export const AIChatModal: React.FC<AIChatModalProps> = ({
 
           {isLoading && (
             <div className="flex items-center gap-2 text-xs text-[#005652] bg-[#a6f0ea]/40 px-3 py-2 rounded-xl max-w-xs animate-pulse">
-              <span className="material-symbols-outlined text-[16px] animate-spin">sync</span>
+              <span className="material-symbols-outlined text-[16px] animate-spin-ccw">sync</span>
               <span>Gemini AI가 보안 답변을 작성 중입니다...</span>
             </div>
           )}
@@ -111,7 +111,7 @@ export const AIChatModal: React.FC<AIChatModalProps> = ({
             className="bg-[#005652] text-white px-4 py-2 rounded-full text-xs font-bold hover:bg-[#1f6f6b] disabled:opacity-40 transition-all flex items-center gap-1"
           >
             <span>{isLoading ? '답변 대기중' : '전송'}</span>
-            <span className={`material-symbols-outlined text-[16px] ${isLoading ? 'animate-spin' : ''}`}>
+            <span className={`material-symbols-outlined text-[16px] ${isLoading ? 'animate-spin-ccw' : ''}`}>
               {isLoading ? 'sync' : 'send'}
             </span>
           </button>

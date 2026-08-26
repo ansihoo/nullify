@@ -153,7 +153,7 @@ export const VerificationView: React.FC<VerificationViewProps> = ({
             disabled={isRetesting}   /* 수동은 의도적 행동 — 24h 쿨다운(자동 전용)에 묶지 않는다. 패치 직후 즉시 재검증용. */
             className="inline-flex items-center gap-1.5 bg-[#005652] text-white text-[13px] font-bold px-3.5 py-2 rounded-lg hover:bg-[#1f6f6b] disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm"
           >
-            <span className={`material-symbols-outlined text-[18px] ${isRetesting ? 'animate-spin' : ''}`}>sync</span>
+            <span className={`material-symbols-outlined text-[18px] ${isRetesting ? 'animate-spin-ccw' : ''}`}>sync</span>
             {isRetesting ? '재검증 중…' : '지금 재검증'}
           </button>
         </div>
