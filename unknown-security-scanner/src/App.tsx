@@ -18,7 +18,7 @@ import {
   INITIAL_SCAN_HISTORY,
 } from './data/mockSecurityData';
 import { Vulnerability, ChatMessage, ScanHistoryRecord, FilteredNoiseItem } from './types';
-import { scanEntry, resolveIntent, generateFix, rescanTarget, scanSource } from './api/nullify';
+import { scanEntry, resolveIntent, generateFix, generateFixAll, rescanTarget, scanSource } from './api/nullify';
 
 // ── 스캔 세션(대화) 로컬 히스토리 — 브라우저 localStorage 에 저장, 스캔마다 갱신 ──
 const SESS_KEY = 'nullify_sessions';
@@ -296,6 +296,27 @@ export function App() {
     }
   };
 
+  // 모두 수정 — 시크릿+헤더를 한 커밋에 묶어 생성. 명령 하나만 push 하면 4건이 한 번에 죽는다.
+  // (개별 패치를 두 번 push·순서 지키는 녹화 실수를 없애기 위함.)
+  const handleGenerateAll = async () => {
+    try {
+      const repo = rawRepo || (vulnerabilities.map((v) => (v as any)._source).find(Boolean) ?? '');
+      if (!repo) { setScanError('소스 레포가 없어 모두 수정 불가 — 레포를 함께 스캔하세요.'); return; }
+      const fix = await generateFixAll(repo);
+      if (!fix.ok) { setScanError(fix.reason || fix.error || '모두 수정 실패'); return; }
+      const prInfo = { branch: fix.branch, commit: fix.commit, title: fix.title, gh: fix.gh,
+                       fixSource: fix.fixSource };
+      // 모든 취약점에 같은 커밋 정보를 붙이고 '수정 완료(커밋)'로. 증명(죽음)은 재검증에서.
+      setVulnerabilities((prev) => prev.map((v) =>
+        v.status === 'ignored' ? v
+          : { ...v, status: 'resolved', statusText: '수정 완료 (모두 수정 커밋)',
+              ...(({ _pr: prInfo } as any)) }));
+      setSelectedVuln((cur) => ({ ...cur, status: 'resolved', ...(({ _pr: prInfo } as any)) }));
+    } catch (e: any) {
+      setScanError(`모두 수정 실패: ${e?.message || e}`);
+    }
+  };
+
   // 재검증: 패치 배포/푸시 뒤 '같은 검사'를 다시 돌려 죽음을 확인한다.
   //  - 소스취약점(시크릿 등)은 SAST 라서 URL 재검증(DAST)엔 절대 안 잡힌다 → repo 를 최신 clone 해
   //    scanSource 로 재스캔한다.  런타임취약점(헤더 등)은 rescanTarget(DAST).  둘 다면 합친다.
@@ -505,6 +526,7 @@ export function App() {
             <FixDiffView
               vuln={selectedVuln}
               onGeneratePatch={handleGeneratePatch}
+              onGenerateAll={handleGenerateAll}
               onNavigateToVerify={handleNavigateToVerify}
               onSelectVuln={handleSelectVuln}
               allVulnerabilities={vulnerabilities}

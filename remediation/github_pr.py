@@ -245,13 +245,83 @@ def create_secret_fix(repo):
             "repo_path": repo}
 
 
+def create_fix_all(repo):
+    """시크릿 제거 + 보안 헤더(vercel.json)를 한 브랜치·한 커밋에 묶어 적용한다.
+       데모 '모두 수정' 용 — 명령 하나만 붙여넣으면 4건(시크릿+헤더)이 한 번에 죽는다.
+       (개별 create_secret_fix/create_headers_fix 는 각각 브랜치·커밋을 따로 만들어 순서·
+        스택을 신경써야 했는데, 이건 한 커밋이라 그 위험이 없다.)"""
+    import re
+    import json as _json
+    ensure_repo(repo)
+    base = _git(repo, "rev-parse", "--abbrev-ref", "HEAD").strip() or "main"
+    branch = "nullify/fix-all"
+    title = "fix(security): 하드코딩 시크릿 제거 + 보안 헤더 추가"
+    _git(repo, "checkout", "-q", "-B", branch, base)
+    changed = []
+
+    # 1) 하드코딩 시크릿(AKIA...) 제거 — 소스 전체 훑어 리터럴만 지운다.
+    rx = re.compile(r"""(["'])AKIA[0-9A-Z]{12,}\1""")
+    repl = '"" /* [VibeShield] 하드코딩 시크릿 제거 — 서버측/시크릿 매니저로 이전 */'
+    for dirpath, dirs, files in os.walk(repo):
+        dirs[:] = [d for d in dirs if d not in ("node_modules", ".git", "dist", "build")]
+        for name in files:
+            if not name.endswith((".js", ".ts", ".tsx", ".jsx", ".mjs", ".cjs")):
+                continue
+            p = os.path.join(dirpath, name)
+            try:
+                if os.path.getsize(p) > 2_000_000:
+                    continue
+                s = open(p, encoding="utf-8").read()
+            except (OSError, UnicodeDecodeError):
+                continue
+            if rx.search(s):
+                open(p, "w", encoding="utf-8").write(rx.sub(repl, s))
+                rel = os.path.relpath(p, repo)
+                _git(repo, "add", rel)
+                changed.append(rel)
+
+    # 2) 보안 헤더 — Vercel 은 vercel.json 의 headers 를 읽는다(기존 있으면 병합).
+    vpath = os.path.join(repo, "vercel.json")
+    try:
+        conf = _json.load(open(vpath, encoding="utf-8")) if os.path.exists(vpath) else {}
+        if not isinstance(conf, dict):
+            conf = {}
+    except Exception:
+        conf = {}
+    conf["headers"] = [{
+        "source": "/(.*)",
+        "headers": [{"key": h, "value": v} for h, v in _SEC_HEADERS],
+    }]
+    open(vpath, "w", encoding="utf-8").write(_json.dumps(conf, ensure_ascii=False, indent=2) + "\n")
+    _git(repo, "add", "vercel.json")
+    changed.append("vercel.json")
+
+    if not changed:
+        _git(repo, "checkout", "-q", base)
+        return {"kind": "all", "needs_review": True,
+                "reason": "적용할 수정(하드코딩 시크릿/헤더)을 찾지 못했습니다."}
+
+    _commit(repo, title)
+    commit = _git(repo, "rev-parse", "--short", "HEAD").strip()
+    diff = _git(repo, "show", "--no-color", "HEAD")
+    _git(repo, "checkout", "-q", base)
+    gh = ('cd "%s"\n'
+          'git push origin %s:%s'
+          % (repo, branch, base))
+    return {"kind": "all", "branch": branch, "commit": commit, "title": title,
+            "diff": diff, "fix_source": "catalog(secret+headers)", "gh": gh,
+            "repo_path": repo, "changed": changed}
+
+
 def create_fix(repo, kind, file_rel=None):
     """진짜 git 브랜치+커밋을 만들고 실제 diff 를 돌려준다.
-       headers/secret 은 전용 자동수정 경로로 분기. 그 외는 카탈로그→LLM→검토 순."""
+       headers/secret/all 은 전용 자동수정 경로로 분기. 그 외는 카탈로그→LLM→검토 순."""
     if kind == "headers":
         return create_headers_fix(repo)
     if kind == "secret":
         return create_secret_fix(repo)
+    if kind == "all":
+        return create_fix_all(repo)
     ensure_repo(repo)
     spec = FIXES.get(kind)
     file_rel = file_rel or (spec["file"] if spec else "app.py")

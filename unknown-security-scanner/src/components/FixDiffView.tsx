@@ -5,6 +5,7 @@ import { Vulnerability } from '../types';
 interface FixDiffViewProps {
   vuln: Vulnerability;
   onGeneratePatch: (vuln: Vulnerability) => void;
+  onGenerateAll?: () => void;   // 모두 수정 — 시크릿+헤더를 한 커밋에
   onNavigateToVerify: () => void;
   onSelectVuln: (vuln: Vulnerability) => void;
   allVulnerabilities: Vulnerability[];
@@ -14,6 +15,7 @@ interface FixDiffViewProps {
 export const FixDiffView: React.FC<FixDiffViewProps> = ({
   vuln,
   onGeneratePatch,
+  onGenerateAll,
   onNavigateToVerify,
   onSelectVuln,
   allVulnerabilities,
@@ -238,15 +240,29 @@ ${vuln.codeSnippet.afterCode.split('\n').map((l) => `+ ${l}`).join('\n')}
               <span className="material-symbols-outlined text-[18px]">verified</span>
             </button>
           ) : (
-            <button
-              id="btn-generate-patch"
-              onClick={handlePatchSubmit}
-              disabled={!agreedToGit}
-              className="w-full md:w-auto bg-[#005652] text-white px-8 py-3 rounded-xl font-bold text-[15px] hover:bg-[#1f6f6b] active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-[18px]">auto_fix_high</span>
-              <span>패치 생성</span>
-            </button>
+            <>
+              <button
+                id="btn-generate-patch"
+                onClick={handlePatchSubmit}
+                disabled={!agreedToGit}
+                className="w-full md:w-auto bg-[#005652] text-white px-8 py-3 rounded-xl font-bold text-[15px] hover:bg-[#1f6f6b] active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[18px]">auto_fix_high</span>
+                <span>패치 생성</span>
+              </button>
+              {/* 모두 수정 — 시크릿+헤더를 한 커밋에. 명령 하나만 push 하면 4건 동시 사망(데모용). */}
+              {onGenerateAll && canFix && allVulnerabilities.length > 1 && (
+                <button
+                  id="btn-generate-all"
+                  onClick={onGenerateAll}
+                  disabled={!agreedToGit}
+                  className="w-full md:w-auto bg-[#00201e] text-white px-6 py-3 rounded-xl font-bold text-[15px] hover:bg-[#1f6f6b] active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[18px]">done_all</span>
+                  <span>모두 수정 ({allVulnerabilities.length}건 한 번에)</span>
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>

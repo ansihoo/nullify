@@ -547,6 +547,21 @@ export async function generateFix(v: Vulnerability): Promise<FixResult> {
 }
 
 /**
+ * 모두 수정 — 시크릿 제거 + 보안 헤더(vercel.json)를 한 커밋에 묶어 생성(/api/connect?kind=all).
+ * 명령 하나만 push 하면 4건이 한 번에 죽는다(데모 안정화, 순서·스텝 실수 제거).
+ */
+export async function generateFixAll(repo: string): Promise<FixResult> {
+  const url = `${API_BASE}/api/connect?source=${encodeURIComponent(repo)}&kind=all`;
+  const res = await fetch(url, { headers: authHeaders() });
+  if (!res.ok) return { ok: false, error: `모두 수정 실패 ${res.status}` };
+  const d = await res.json();
+  if (d.error) return { ok: false, error: d.error };
+  if (d.needs_review) return { ok: false, needsReview: true, reason: d.reason };
+  return { ok: true, branch: d.branch, commit: d.commit, title: d.title,
+           diff: d.diff, gh: d.gh, fixSource: d.fix_source };
+}
+
+/**
  * 재검증(/api/rescan): 패치 배포 후 같은 공격을 다시 돌려 이전 스캔과 비교.
  * 반환에 compare(fixed/new/unchanged) 포함.
  */
