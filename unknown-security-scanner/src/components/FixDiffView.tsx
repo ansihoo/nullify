@@ -275,6 +275,9 @@ ${vuln.codeSnippet.afterCode.split('\n').map((l) => `+ ${l}`).join('\n')}
       </div>
       )}
 
+      {/* 스크롤 앵커 — 수정 결과가 화면 아래에 뜨므로 App 이 이 id 로 자동 스크롤. */}
+      <div id="fix-result-anchor" style={{ scrollMarginTop: 80 }} />
+
       {/* 실제 git 수정 결과 (백엔드 /api/pr) */}
       {(() => {
         const pr = (vuln as any)._pr;

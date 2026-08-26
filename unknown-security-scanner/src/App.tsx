@@ -268,6 +268,14 @@ export function App() {
     setCurrentTab('fix');
   };
 
+  // 수정 결과(명령/diff) 패널로 스크롤 — 화면 아래에 렌더되므로 안 하면 '명령이 안 나온다'고
+  // 느낀다. 상태 반영·리렌더 후 위치가 잡히도록 약간 지연.
+  const scrollToFixResult = () => {
+    setTimeout(() => {
+      document.getElementById('fix-result-anchor')?.scrollIntoView({ block: 'start' });
+    }, 250);
+  };
+
   const handleGeneratePatch = async (vuln: Vulnerability) => {
     // 백엔드 /api/pr 실호출 — 실제 git 브랜치·커밋 생성(push/PR 만 사용자 몫).
     try {
@@ -291,6 +299,7 @@ export function App() {
       setSelectedVuln((cur) => (cur.id === vuln.id
         ? { ...cur, status: resolved ? 'resolved' : cur.status, ...(({ _pr: prInfo } as any)) }
         : cur));
+      if (fix.ok) scrollToFixResult();
     } catch (e: any) {
       setScanError(`수정 생성 실패: ${e?.message || e}`);
     }
@@ -312,6 +321,7 @@ export function App() {
           : { ...v, status: 'resolved', statusText: '수정 완료 (모두 수정 커밋)',
               ...(({ _pr: prInfo } as any)) }));
       setSelectedVuln((cur) => ({ ...cur, status: 'resolved', ...(({ _pr: prInfo } as any)) }));
+      scrollToFixResult();   // 명령 패널이 화면 아래에 뜨므로 그리로 스크롤(안 그러면 안 보임)
     } catch (e: any) {
       setScanError(`모두 수정 실패: ${e?.message || e}`);
     }
