@@ -23,6 +23,7 @@ import urllib.parse
 _DEFAULT_ALLOW = {
     "case-intake-pro.lovable.app",   # 소유자 본인 소유 테스트 사이트
     "case-intake-pro-vuln-target.vercel.app",   # 팀원이 만든 데모용 취약 과녁
+    "case-intake-pro-vuln-target-demo.vercel.app",   # ansihoo 소유 데모전용 복제 과녁(반복 녹화용)
 }
 ALLOWLIST = _DEFAULT_ALLOW | set(
     h.strip().lower()

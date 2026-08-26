@@ -43,13 +43,37 @@ def ensure_repo(repo):
          "-c", "commit.gpgsign=false", "commit", "-q", "-m", "init app")
 
 
+# 데모/작업용 '고정' clone 이 사는 곳. 임시폴더 대신 여기에 두면 사용자가 cd 해서
+# 직접 push 할 수 있고, 패치 커밋이 재검증(재clone)에도 사라지지 않는다.
+_STABLE_CLONES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "clones")
+
+
+def _stable_dest(source):
+    """repo URL → 고정 로컬 경로(레포 이름 기준). 같은 레포는 항상 같은 폴더."""
+    import re
+    name = re.sub(r"\W+", "_", (source.rstrip("/").split("/")[-1] or "repo").replace(".git", ""))
+    return os.path.join(_STABLE_CLONES_DIR, name)
+
+
 def connect_repo(source):
     """레포를 clone 해서 로컬 작업 사본 경로를 돌려준다.
        source: https URL(네트워크 필요) 또는 로컬 경로/file:// (데모).
-       실제 사용자 레포를 '연결'하는 첫 단계 — 이후 create_fix 가 이 사본에 패치한다.
-       ※ 임의 레포의 '정확한 패치'는 그 코드 분석이 필요(우리 카탈로그는 우리 샘플용).
-         지금은 clone 파이프라인이 실제로 도는 것까지 보인다."""
-    dest = tempfile.mkdtemp(prefix="nullify_clone_")
+       원격 URL 이면 '고정 경로'(clones/<레포명>)에 clone·재사용한다. 이유:
+         ① 사용자가 그 경로로 cd 해서 복사한 명령(git push)을 그대로 실행 가능
+         ② 매번 origin/main 으로 reset 해 최신 상태 반영(재검증이 push 된 패치를 봄)
+       로컬 경로면 그대로 돌려준다(토이/sample_repo).
+       ※ 임의 레포의 '정확한 패치'는 그 코드 분석이 필요(우리 카탈로그는 우리 샘플용)."""
+    if not source.startswith(("http://", "https://")):
+        return source
+    dest = _stable_dest(source)
+    if os.path.isdir(os.path.join(dest, ".git")):
+        # 재사용 — 최신으로 맞추되 로컬 브랜치(패치 커밋)는 보존(main 만 reset).
+        _git(dest, "fetch", "-q", "origin")
+        _git(dest, "checkout", "-q", "main")
+        _git(dest, "reset", "-q", "--hard", "origin/main")
+        _git(dest, "clean", "-qfd")
+        return dest
+    os.makedirs(_STABLE_CLONES_DIR, exist_ok=True)
     r = subprocess.run(["git", "clone", "-q", source, dest], capture_output=True, text=True)
     if r.returncode != 0:
         raise RuntimeError("clone 실패: %s" % r.stderr.strip())
@@ -208,11 +232,15 @@ def create_secret_fix(repo):
     commit = _git(repo, "rev-parse", "--short", "HEAD").strip()
     diff = _git(repo, "show", "--no-color", "HEAD")
     _git(repo, "checkout", "-q", base)
-    gh = ('git push -u origin %s\n'
-          'gh pr create --base %s --head %s --title "%s" --body "VibeShield 시크릿 제거 자동 수정"'
-          % (branch, base, branch, title))
+    # 복사-실행용 명령: 고정 clone 으로 cd 한 뒤, 패치 브랜치를 main 에 push 한다.
+    #  → Vercel 은 main push 에 프로덕션 재배포 → 재검증에서 '이상없음(죽음)' 확인.
+    #  (브랜치 push 는 preview 로만 가서 프로덕션 URL 이 안 바뀌므로 branch:main 으로 올린다.)
+    gh = ('cd "%s"\n'
+          'git push origin %s:%s'
+          % (repo, branch, base))
     return {"kind": "secret", "branch": branch, "commit": commit, "title": title,
-            "diff": diff, "fix_source": "catalog(secret/hardcoded)", "gh": gh}
+            "diff": diff, "fix_source": "catalog(secret/hardcoded)", "gh": gh,
+            "repo_path": repo}
 
 
 def create_fix(repo, kind, file_rel=None):
