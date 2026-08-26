@@ -1,27 +1,50 @@
-# Nullify 웹 — 표준 라이브러리만 쓰므로 pip 의존성 설치 단계가 없다.
-FROM python:3.12-slim
+# ─────────────────────────────────────────────────────────────────────
+# 1단계: React(Vite) 프론트엔드 + Express 서버 번들 빌드
+# ─────────────────────────────────────────────────────────────────────
+FROM node:22-slim AS webbuild
+WORKDIR /build
 
+# package*.json 만 먼저 복사하면 소스만 바뀐 재배포에서 npm ci 레이어가 캐시된다.
+COPY unknown-security-scanner/package.json unknown-security-scanner/package-lock.json ./
+RUN npm ci
+
+COPY unknown-security-scanner/ ./
+# vite build → dist/(정적 파일), esbuild → dist/server.cjs
+RUN npm run build
+# --packages=external 로 번들해서 런타임에 node_modules 가 필요하다.
+# 빌드 도구(vite·esbuild·typescript)는 이제 불필요하므로 쳐낸다.
+RUN npm prune --omit=dev
+
+# ─────────────────────────────────────────────────────────────────────
+# 2단계: 실행 이미지 — 파이썬 스캔 엔진 + Node 웹 서버를 한 컨테이너에
+# ─────────────────────────────────────────────────────────────────────
+FROM python:3.12-slim
 WORKDIR /app
 
-# git: remediation/github_pr.py 가 브랜치 생성·패치 커밋에 쓴다.
-#      slim 이미지엔 git 이 없어서 web.py 가 import 중 ensure_repo() 에서 죽었다.
-# ca-certificates: 사용자 레포를 https 로 clone 할 때 필요
-#      (--no-install-recommends 를 쓰면 자동으로 안 딸려온다).
-# COPY 앞에 두는 이유: 소스만 바뀐 재배포에서 이 레이어가 캐시돼 빌드가 빨라진다.
+# git: remediation/github_pr.py 가 브랜치 생성·패치 커밋에 쓴다(없으면 web.py 가 import 중 죽음).
+# ca-certificates: https 로 사용자 레포를 clone 할 때 필요.
+# libstdc++6: 아래에서 복사해 오는 node 바이너리가 링크하는 런타임.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends git ca-certificates \
+ && apt-get install -y --no-install-recommends git ca-certificates libstdc++6 \
  && rm -rf /var/lib/apt/lists/*
 
+# node 바이너리만 가져온다. 두 이미지 모두 Debian bookworm 기반이라 호환된다.
+# (node 이미지를 베이스로 삼고 python 을 apt 로 넣으면 3.11 이 깔려서 3.12 를 못 쓴다.)
+COPY --from=webbuild /usr/local/bin/node /usr/local/bin/node
+
 COPY . /app
+COPY --from=webbuild /build/dist         /app/unknown-security-scanner/dist
+COPY --from=webbuild /build/node_modules /app/unknown-security-scanner/node_modules
 
-# 8000: 웹 대시보드 (데모 과녁은 8009 로 프로세스 내부에서 함께 뜬다)
-EXPOSE 8000
-ENV PYTHONUNBUFFERED=1
+# production 이어야 server.ts 가 Vite 개발 미들웨어 대신 dist/ 를 정적 서빙한다.
+ENV NODE_ENV=production \
+    PYTHONUNBUFFERED=1
 
-# 배포 시 주의: web.py 는 데모용 취약 과녁(vuln_app)을 같이 띄운다 → 개발/데모 전용.
-# 실제 서비스에서는 과녁을 빼고, 대상은 authorize.py 의 정책으로만 스캔해야 한다.
-# PaaS(Render 등)는 포트를 $PORT 로 주입한다. exec 형식 CMD 는 셸을 안 거쳐 변수 확장이
-# 안 되므로 sh -c 로 감싼다. ${PORT:-8000} = 주입되면 그 값, 없으면 8000(로컬 그대로 동작).
-# NULLIFY_HOST 는 컨테이너에서만 0.0.0.0 으로 덮어쓴다 — 코드 기본값 127.0.0.1 은 로컬 안전장치.
-# exec: python 을 PID 1 로 만들어 재배포 시 SIGTERM 이 셸에 막히지 않게 한다.
-CMD ["sh", "-c", "NULLIFY_HOST=0.0.0.0 NULLIFY_PORT=${PORT:-8000} exec python web.py"]
+EXPOSE 3000
+
+# 두 프로세스를 함께 띄운다:
+#   - 파이썬 엔진: 127.0.0.1:8000 (컨테이너 내부 전용. 외부 노출은 Express 프록시로만)
+#   - Express:     $PORT (Render 가 주입) — SPA 서빙 + /nullify/* 프록시 + Gemini 챗
+# exec 로 node 를 PID 1 로 만들어 재배포 시 SIGTERM 이 제대로 전달되게 한다.
+# 엔진이 죽으면 /healthz 가 503 을 내므로 배포 실패로 즉시 드러난다.
+CMD ["sh", "-c", "cd /app && NULLIFY_HOST=127.0.0.1 NULLIFY_PORT=8000 python web.py & cd /app/unknown-security-scanner && exec node dist/server.cjs"]

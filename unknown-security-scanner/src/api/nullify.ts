@@ -22,7 +22,27 @@ import {
 } from '../types';
 
 const ENV = (import.meta as any).env || {};
-export const API_BASE: string = ENV.VITE_NULLIFY_API || 'http://127.0.0.1:8000';
+
+/**
+ * 백엔드 주소 결정.
+ *
+ * 로컬 개발: 예전 그대로 127.0.0.1:8000 을 직접 때린다(두 서버 따로 띄우는 방식).
+ * 배포:      같은 오리진의 '/nullify' 로 보낸다. Express 가 컨테이너 내부
+ *            127.0.0.1:8000 으로 프록시한다(server.ts 참고).
+ *
+ * 왜 상대경로인가:
+ *   1) 배포 주소를 빌드 시점에 번들에 박지 않아도 된다.
+ *   2) HTTPS 페이지에서 HTTP 를 부르는 mixed content 차단을 피한다.
+ *   3) 같은 오리진이라 CORS 프리플라이트가 아예 없다.
+ */
+function defaultApiBase(): string {
+  if (typeof window === 'undefined') return 'http://127.0.0.1:8000';
+  const h = window.location.hostname;
+  const isLocal = h === 'localhost' || h === '127.0.0.1' || h === '::1';
+  return isLocal ? 'http://127.0.0.1:8000' : '/nullify';
+}
+
+export const API_BASE: string = ENV.VITE_NULLIFY_API || defaultApiBase();
 const API_TOKEN: string = ENV.VITE_NULLIFY_TOKEN || '';
 
 /** 백엔드 finding 의 (우리가 쓰는) 모양. web.py run_scan 참고. */

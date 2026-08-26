@@ -1,0 +1,12 @@
+# 빌드 컨텍스트에서 뺄 것들 — 이미지 안에서 새로 만들거나, 들어가면 안 되는 것들
+**/node_modules
+**/dist
+**/__pycache__
+*.py[cod]
+.git
+.env
+.env.*
+# 런타임 생성물(SQLite·clone 작업본·데모 레포)
+*.db
+clones/
+sample_repo/

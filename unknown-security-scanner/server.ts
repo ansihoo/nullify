@@ -1,12 +1,12 @@
 import 'dotenv/config';
 import express from 'express';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// NOTE: 예전엔 여기서 fileURLToPath(import.meta.url) 로 __dirname 을 만들었는데
+// 둘 다 쓰이지 않는 데다, esbuild 가 CJS 로 번들하면 import.meta 가 비어서
+// 프로덕션 시작 즉시 TypeError 로 죽었다. 정적 경로는 process.cwd() 를 쓴다.
 
 let aiClient: GoogleGenAI | null = null;
 
@@ -26,7 +26,7 @@ function getGenAI(): GoogleGenAI | null {
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   app.use(express.json());
 
@@ -124,6 +124,54 @@ ${ctx}
     } catch (err: any) {
       console.error('Error in /api/gemini/analyze-repo:', err);
       res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Nullify 파이썬 엔진 프록시 ─────────────────────────────────────
+  // 브라우저 → /nullify/api/*  →  컨테이너 내부 127.0.0.1:8000/api/*
+  //
+  // 한 겹 두는 이유:
+  //   1) 배포 주소를 프론트 번들에 빌드 시점부터 박지 않아도 된다(상대경로).
+  //   2) HTTPS 페이지가 HTTP 백엔드를 부르는 mixed content 차단을 피한다.
+  //   3) 같은 오리진이라 CORS 프리플라이트가 없다.
+  //   4) X-API-Token 을 서버에서 붙이므로 토큰이 브라우저로 새지 않는다.
+  const ENGINE = process.env.NULLIFY_ENGINE || 'http://127.0.0.1:8000';
+  const ENGINE_TOKEN = process.env.NULLIFY_API_TOKEN || '';
+
+  app.all('/nullify/*', async (req, res) => {
+    const suffix = req.originalUrl.slice('/nullify'.length);
+    const headers: Record<string, string> = {};
+    if (ENGINE_TOKEN) headers['X-API-Token'] = ENGINE_TOKEN;
+
+    let body: string | undefined;
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      headers['Content-Type'] = 'application/json';
+      body = JSON.stringify(req.body ?? {});
+    }
+
+    try {
+      const upstream = await fetch(ENGINE + suffix, { method: req.method, headers, body });
+      const text = await upstream.text();
+      res
+        .status(upstream.status)
+        .type(upstream.headers.get('content-type') || 'application/json')
+        .send(text);
+    } catch (err: any) {
+      console.error('nullify proxy error:', err?.message);
+      res.status(502).json({ error: '스캔 엔진에 연결하지 못했습니다: ' + (err?.message || 'unknown') });
+    }
+  });
+
+  // Render 헬스체크. 엔진까지 살아있어야 200 — 파이썬이 죽으면 배포가 실패로 드러난다.
+  app.get('/healthz', async (_req, res) => {
+    try {
+      const r = await fetch(ENGINE + '/healthz', {
+        headers: ENGINE_TOKEN ? { 'X-API-Token': ENGINE_TOKEN } : {},
+      });
+      if (!r.ok) return res.status(503).json({ web: 'ok', engine: 'unhealthy' });
+      return res.json({ web: 'ok', engine: await r.json() });
+    } catch (err: any) {
+      return res.status(503).json({ web: 'ok', engine: 'unreachable', detail: err?.message });
     }
   });
 
