@@ -183,11 +183,13 @@ def create_headers_fix(repo):
     commit = _git(repo, "rev-parse", "--short", "HEAD").strip()
     diff = _git(repo, "show", "--no-color", "HEAD")
     _git(repo, "checkout", "-q", base)
-    gh = ('git push -u origin %s\n'
-          'gh pr create --base %s --head %s --title "%s" --body "VibeShield 보안 헤더 자동 수정"'
-          % (branch, base, branch, title))
+    # 시크릿과 동일: cd 후 브랜치를 main 에 push → Vercel 프로덕션 재배포 → 헤더 검증 통과.
+    gh = ('cd "%s"\n'
+          'git push origin %s:%s'
+          % (repo, branch, base))
     return {"kind": "headers", "branch": branch, "commit": commit, "title": title,
-            "diff": diff, "fix_source": "catalog(headers/%s)" % stack, "gh": gh}
+            "diff": diff, "fix_source": "catalog(headers/%s)" % stack, "gh": gh,
+            "repo_path": repo}
 
 
 def create_secret_fix(repo):
